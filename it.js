@@ -150,8 +150,16 @@
       else if(isGenerator(any)) {
         any = new Promise(bind(this, any));
       }
-      else if(isFunction(any)) {
+      else if(isAsyncFunction(any)) {
         any = any();
+      }
+      else if(isFunction(any)){
+        try {
+          any = any();
+        }
+        catch(e){
+
+        }
       }
       return any;
     },
@@ -214,13 +222,13 @@
   function newit(ident) {
     var me = create(itProto);
     me.ident = ident;
-    function it(topic, func) {
-      me.log(topic);
-      return go(func(newit(ident + '  ')));
-    }
+    return setPrototype(bind(it, me), me);
+  }
 
-    setPrototype(it, me);
-    return it;
+  function it(topic, func) {
+    var me = this;
+    me.log(topic);
+    return go(func(newit(me.ident + '  ')));
   }
 
   function delay(ms) {
