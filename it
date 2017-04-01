@@ -1,0 +1,1 @@
+node -e "global.it=require('./it.js');require('./$*')"

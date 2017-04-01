@@ -95,9 +95,22 @@
   var _test = RegExp_prototype.test;
 
   /** --------------------------------------------------------------------------
+   * Date
+   */
+  var now = Date.now;
+
+  /** --------------------------------------------------------------------------
+   * Error
+   */
+  var isError = bind(_isPrototypeOf, Error.prototype);
+
+  /** --------------------------------------------------------------------------
    * Promise, Generator, Async Function
    */
   var isPromise = bind(_isPrototypeOf, Promise.prototype);
+  var Generator_prototype = getPrototype(getPrototype(function*() {
+  }()));
+  var isGenerator = bind(_isPrototypeOf, Generator_prototype);
 
   function isSyncFunction(any) {
     return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function ';
@@ -107,12 +120,9 @@
     return isFunction(any) && Object.toString.call(any).substr(0, 5) === 'async';
   }
 
-  var isGeneratorFunction = function(any){
+  var isGeneratorFunction = function (any) {
     return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function*';
   };
-
-  var isGenerator = bind(_isPrototypeOf, getPrototype(function*(){}.prototype));
-
 
 
   /** 扩展支持: ----------------------------------------------------------------------------------------
@@ -120,7 +130,7 @@
    */
 
   var reStacks = /(?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?(?:#.*)?:\d+:\d+/g;
-  var reStack = /((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?)(?:#.*)?:(\d+):\d+/;
+  var reStack = /((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
 
   function statement(clue) {
     var ms = clue.stack.match(reStacks);
@@ -138,78 +148,178 @@
     return clue;
   }
 
-
+  function flaw(err) {
+    var ms = err.stack.match(reStack);
+    err = err.toString();
+    if (ms) {
+      var path = ms[1], l = ms[2] - 1, c = ms[3] - 0;
+      var lines = fetch(path);
+      err += ident('\n' + lines[l] + '\n' + Array(c).join(' ') + '^' + '\nat ' + ms[0], '  ');
+    }
+    return err;
+  }
 
   /** 运行机制: ----------------------------------------------------------------------------------------
    *
    */
-  var go = bind(function (any) {
-      if(isGeneratorFunction(any)) {
-        any = new Promise(bind(this, any()));
+  function go(gen, timeout, error) {
+    return isGenerator(gen) ? new Promise(function (resolve, reject) {
+      var state, timer;
+      if (timeout) {
+        timer = setTimeout(function () {
+          gen.done = 1;
+          if (error)
+            reject(error);
+        }, timeout);
       }
-      else if(isGenerator(any)) {
-        any = new Promise(bind(this, any));
-      }
-      else if(isAsyncFunction(any)) {
-        any = any();
-      }
-      else if(isFunction(any)){
-        try {
-          any = any();
-        }
-        catch(e){
 
-        }
-      }
-      return any;
-    },
-    function (resolve, reject) {
-      var me = this;
-      var next = me.next.bind(me);
-      goto(next);
-      function goto(next, value) {
-        var state;
+      next();
 
+      function next(value) {
         try {
-          state = next(value);
-          value = state.value;
-          if (isPromise(value)) {
-            value.then(goon, stop);
-          }
-          else if (isGenerator(value)) {
-            new Promise(promise.bind(value)).then(goon, stop);
-          }
-          else {
-            goon(value);
-          }
+          state = gen.next(value);
         }
         catch (e) {
-          reject(e);
+          return reject(e);
         }
+        value = state.value;
+        if (isGenerator(value)) {
+          Object.setPrototypeOf(value, gen);
+          go(value).then(goon, stop);
+        }
+        else if (isPromise(value)) {
+          value.then(goon, stop);
+        }
+        else {
+          goon(value);
+        }
+      }
 
-        function goon(value) {
-          if (state.done) {
-            resolve(value);
-          }
-          else {
-            goto(next, value);
+      function goon(value) {
+        if (gen.done) {
+          if (!state.done) {
+            state = gen.return();
+            clearTimeout(gen.timer);
           }
         }
+        else if (state.done) {
+          gen.done = 1;
+          resolve(value);
+        }
+        else {
+          next(value);
+        }
+      }
 
-        function stop(error) {
+      function stop(value) {
+        if (gen.done) {
+          if (!state.done) {
+            state = gen.return();
+            clearTimeout(timer);
+          }
+        }
+        else {
           try {
-            state = me.throw(error);
-            goto(next, state.value);
+            state = gen.throw(value);
+            // next(state.value);
+            goon(state.value);
           }
           catch (e) {
-            reject(e);
+            return reject(e);
           }
         }
       }
-    }
-  );
+    }) : gen;
+  }
 
   /** 测试机制: ----------------------------------------------------------------------------------------
+   *
+   */
+  var defaultTimeout = 2000;
+  var defaultPeriod = 10;
+
+  function newIt(ident, upt, upms) {
+    var me = create(itProto);
+    me.ident = ident;
+
+    function it(topic, any, ms) {
+      var t = now(), err;
+      if(upms) {
+        var left = upms - (t - upt);
+        if(left<=0) return;  // 已超时，不再进行测试
+        if(!ms) {
+          ms = left;
+        }
+        else if(ms>left) {
+          ms = left;
+        }
+      }
+      else if(ms) {
+        err = ms;
+      }
+      me.t = t;
+      me.ms = ms;
+      me.log(topic);
+      it = newIt(me.ident + '  ', t, ms);
+      if (isGeneratorFunction(any)) {
+        if(ms) {
+          any = (go(any(it), ms, err));
+        }
+        else {
+          any = go(any(it));
+        }
+        any.then(bind(done, it), bind(fault, it)); // .catch(bind(fault, it));
+      }
+      else if (isAsyncFunction(any)) {
+        any = any(it).then(bind(done, it), bind(fault, it));  //.catch(bind(fault, it));
+      }
+      else if (isFunction(any)) {
+        try {
+          any = any(it);
+          call(done, it);
+        }
+        catch (e) {
+          call(fault, it, e);
+        }
+      }
+      else if (isGenerator(any)) {
+        if(ms) {
+          any = go(any, ms, err);
+        }
+        else {
+          any = go(any);
+        }
+        any.then(bind(done, it), bind(fault, it));  //.catch(bind(fault, it));
+      }
+      return any;
+    }
+
+    return setPrototype(bind(it, me), me);
+  }
+
+  function done(value) {
+    var me = this, ms = now() - me.zero;
+    if(ms >= defaultPeriod) {
+      call(mark, me, ms + ' ms');
+    }
+    return value;
+  }
+
+  function fault(e) {
+    if(isInteger(e)) {
+      call(out, this, 'timeout ' + e + 'ms !');
+    }
+    else if(isError(e)) {
+      call(error, this, flaw(e));
+    }
+    else if(e === undefined) {
+    }
+    else {
+      call(error, this, String(e));
+    }
+  }
+
+  /** it 原型: ----------------------------------------------------------------------------------------
    *
    */
 
@@ -219,20 +329,22 @@
     should: actual
   };
 
-  function newit(ident) {
-    var me = create(itProto);
-    me.ident = ident;
-    return setPrototype(bind(it, me), me);
-  }
-
-  function it(topic, func) {
-    var me = this;
-    me.log(topic);
-    return go(func(newit(me.ident + '  ')));
-  }
-
   function delay(ms) {
-    return new Promise(partial(setTimeout, [, ms]));
+    var me = this;
+    if(me.ms) {
+      var t = now();
+      var left = me.ms - (t - me.t);
+      if(left<=0) throw undefined;  //抛出静默异常，终止后续运行！
+      if(ms>left) ms = left;
+    }
+    return new Promise(partial(setTimeout, [, ms])).then(function(value){
+      if(me.ms) {
+        var t = now();
+        var left = me.ms - (t - me.t);
+        if(left<=0) throw undefined;  //抛出静默异常，终止后续运行！
+      }
+      return value;
+    });
   }
 
   function actual(value) {
@@ -244,44 +356,148 @@
     return me;
   }
 
+  /** 断言原型: ----------------------------------------------------------------------------------------
+   *
+   */
+
   var assertProto = {
-    get be() {return this},
-    get ok() {
+    get be() {
+      return this
+    },
+
+    get should() {
+      return this;
+    },
+
+    get not() {
       var me = this;
-      me.op = 'ok';
-      me.assert = me.actual;
+      me._not = !me._not;
+      return me;
+    },
+
+    get true() {
+      var me = this;
+      if(!(me.assert = me.actual ^ me._not))
+        me.note = 'expect ' + toJson(me.actual) + (me._not ? ' not' : '') + ' be true.';
       report(me);
       return nop;
+    },
+
+    get false() {
+      var me = this;
+      if(!(me.assert = !me.actual ^ me._not))
+        me.note = 'expect ' + toJson(me.actual) + (me._not ? ' not' : '') + ' be false.';
+      report(me);
+      return nop;
+    },
+
+    get ok() {
+      var me = this;
+      if(!(me.assert = me.actual ^ me._not))
+        me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ok.';
+      report(me);
+      return nop;
+    },
+
+    equal: function (value) {
+      var me = this;
+      if( !(me.assert = (me.actual == value) ^ me._not))
+        me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' equal to ' + toJson(value) + ' .';
+      report(me);
+    },
+
+    throw: function(err) {
+      var me = this;
+      try{
+        me.actual.apply(undefined, me.args);
+        if(!(me.assert = me._not)){
+          me.note = 'expect' + NOT(me) + ' throw but not throw.';
+        }
+      }
+      catch(e) {
+        var message = e.message;
+        if(err) {
+          if(!(me.assert = (message === err) ^ me._not))
+            me.note = 'expect' + NOT(me) + ' throw ' + toJson(err) + ' but throw ' + toJson(message) + '.';
+        }
+        else {
+          if(!(me.assert = !me._not))
+            me.note = 'expect' + NOT(me) + ' throw but throw ' + toJson(message) + '.';
+        }
+      }
+      report(me);
     }
+
   };
 
+  function NOT(me) { return me._not ? ' not' : ''; }
   /** 报告输出: ----------------------------------------------------------------------------------------
    *
    */
+  function report(me) {
+    if(me.assert) {
+      call(okey, me, me.topic);
+    }
+    else {
+      call(fail, me, me.topic);
+      if(me.note) {
+        call(note, me, ident(me.note, '  '));
+      }
+    }
+    // var topic = me.topic;
+    // var assert = !!me.assert ^ !!me._not;
+    // var op = ops[me.op];
+    // if (assert) {
+    //   call(okey, me, topic);
+    // }
+    // else {
+    //   call(fail, me, topic);
+    //   topic = 'expected ' + toJson(me.actual) + ' ' + op[!me._not & 1];
+    //   if (op[2]) {
+    //     topic += ' ' + toJson(me.value);
+    //   }
+    //   topic = ident(topic, '  ');
+    //   call(note, me, topic);
+    // }
+  }
+
   var ident = partial(replace, [, /^/gm]);
+
   function idents(args, blank) {
     args[0] = ident(args[0], blank);
     return args;
   }
 
+  function print(type, args) {
+    apply(console.log, console, idents(stylize(type, args), this.ident));
+  }
+
   function log() {
-    var args = idents(arguments, this.ident);
-    apply(console.log, console, args);
+    call(print, this, 'log', arguments);
   }
 
   function okey() {
-    var args = idents(stylize('okey', arguments), this.ident);
-    apply(console.log, console, args);
+    call(print, this, 'okey', arguments);
   }
 
   function fail() {
-    var args = idents(stylize('fail', arguments), this.ident);
-    apply(console.log, console, args);
+    call(print, this, 'fail', arguments);
   }
 
   function note() {
-    var args = idents(stylize('note', arguments), this.ident);
-    apply(console.log, console, args);
+    call(print, this, 'note', arguments);
+  }
+
+  function mark() {
+    call(print, this, 'mark', arguments);
+  }
+
+  function out() {
+    call(print, this, 'out', arguments);
+  }
+
+  function error() {
+    call(print, this, 'error', arguments);
   }
 
   var ops = {
@@ -290,24 +506,6 @@
     equiv: ['not equivalent to', 'equivalent to', 1],
     same: ['not be same as', 'be same as', 1]
   };
-
-  function report(me) {
-    var topic = me.topic;
-    var assert = !!me.assert ^ !!me._not;
-    var op = ops[me.op];
-    if (assert) {
-      call(okey, me, topic);
-    }
-    else {
-      call(fail, me, topic);
-      topic = 'expected ' + toJson(me.actual) + ' ' + op[!me._not & 1];
-      if (op[2]) {
-        topic += ' ' + toJson(me.value);
-      }
-      topic = ident(topic, '  ');
-      call(note, me, topic);
-    }
-  }
 
   var isIdx = bind(_test, /^\d+$/);
   var isIdentifier = bind(_test, /^[A-Za-z_$][\w$]*$/);
@@ -359,7 +557,7 @@
   var stylize, styles;
 
   if (this.window) {
-    this.it = newit('');
+    this.it = newIt('');
     get = function (path) {
       var http = new XMLHttpRequest;
       http.open('GET', path, false);
@@ -367,32 +565,41 @@
       return http.status / 100 ^ 2 ? '' : http.responseText;
     };
 
+    //
     styles = {
-      okey: { icon: '%c✓ ', color: 'lime'},
-      fail: { icon: '%c✖ ', color: 'tomato'},
-      note: { icon: '%c', color: 'yellow'}
+      log: {icon: '%c', color: 'sliver'},
+      okey: {icon: '%c✔ ', color: 'lime'},
+      fail: {icon: '%c✘ ', color: 'tomato'},
+      note: {icon: '%c', color: 'brown'},
+      mark: {icon: '%c✈ ', color: 'royalblue'}, // ▶ ⚡ ♫ ♪ ✈
+      out: {icon: '%c⤦ ', color: 'magenta'}, //purple magenta crimson plum
+      error: {icon: '%c⦸ ', color: 'brown'}
     };
 
-    stylize = function(key, args) {
+    stylize = function (key, args) {
       args[0] = styles[key].icon + args[0];
-      splice(args, 1, 0, 'color:'+styles[key].color);
+      splice(args, 1, 0, 'color:' + styles[key].color);
       return args;
     };
   }
   else {
-    module.exports = newit('');
+    module.exports = newIt('');
     var fs = require('fs');
     get = function (path) {
       return fs.readFileSync(path, {encoding: 'utf-8'});
     };
 
     styles = {
-      okey: '\x1b[32m✓ ',
-      fail: '\x1b[31m✖ ',
-      note: '\x1b[33m'
+      log: '\x1b[1m',
+      okey: '\x1b[32m\x1b[1m✔ ',
+      fail: '\x1b[31m\x1b[1m✘ ',
+      note: '\x1b[31m',
+      mark: '\x1b[34m\x1b[1m✈ ',
+      out: '\x1b[35m⤦ ',
+      error: '\x1b[31m⦸ '
     };
 
-    stylize = function(key, args) {
+    stylize = function (key, args) {
       args[0] = styles[key] + args[0] + '\x1b[0m';
       return args;
     };
