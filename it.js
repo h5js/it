@@ -68,8 +68,15 @@
     return typeof any === 'string';
   }
 
+  var trim = func(String_prototype.trim);
   var indexOf = func(String_prototype.indexOf);
   var replace = func(String_prototype.replace);
+  var match = func(String_prototype.match);
+
+  function dup(x, n) {
+    for (var dup = ''; n-- > 0;) dup += x;
+    return dup;
+  }
 
   /** --------------------------------------------------------------------------
    * Array
@@ -129,48 +136,44 @@
    *
    */
 
-  var reStacks = /(?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?(?:#.*)?:\d+:\d+/g;
-  var reStack = /((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
+  var reTraces = /(?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?(?:#.*)?:\d+:\d+/g;
+  var reTrace = /((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
 
-  function statement(clue) {
-    var ms = clue.stack.match(reStacks);
-    if (ms && ms.length > 1 && (ms = ms[1].match(reStack))) {
-      var path = ms[1], i = ms[2] - 1;
-      var lines = fetch(path);
-      clue = lines[i++].trim();
-      while (clue.slice(-1) !== ';' && i < lines.length) {
-        clue += lines[i++].trim();
+  /** 获取错误追踪信息 */
+  function getTrace(err, level) {
+    var ms, trace, lines;
+    if (ms = match(err.stack, reTraces)) {
+      if (!isInteger(level))
+        level = 0;
+      if ((ms = ms[level]) && (ms = match(ms, reTrace))) {
+        var row = ms[2] - 1, col = ms[3] - 1;
+        trace = {
+          path: ms[0],
+          row: row,
+          col: col
+        };
+        if ((lines = fetchLines(ms[1])) && row < lines.length) {
+          trace.code = lines[row];
+        }
+        else {
+          trace.code = '"unknown source code";'
+        }
+        return trace;
       }
     }
-    else {
-      clue = 'Unknown code';
-    }
-    return clue;
-  }
-
-  function flaw(err) {
-    var ms = err.stack.match(reStack);
-    err = err.toString();
-    if (ms) {
-      var path = ms[1], l = ms[2] - 1, c = ms[3] - 0;
-      var lines = fetch(path);
-      err += ident('\n' + lines[l] + '\n' + Array(c).join(' ') + '^' + '\nat ' + ms[0], '  ');
-    }
-    return err;
   }
 
   /** 运行机制: ----------------------------------------------------------------------------------------
    *
    */
-  function go(gen, timeout, error) {
+  function go(gen, ms) {
     return isGenerator(gen) ? new Promise(function (resolve, reject) {
       var state, timer;
-      if (timeout) {
+      if (ms > 0) {
         timer = setTimeout(function () {
           gen.done = 1;
-          if (error)
-            reject(error);
-        }, timeout);
+          reject(ms);
+        }, ms);
       }
 
       next();
@@ -179,8 +182,8 @@
         try {
           state = gen.next(value);
         }
-        catch (e) {
-          return reject(e);
+        catch (err) {
+          return reject(err);
         }
         value = state.value;
         if (isGenerator(value)) {
@@ -221,11 +224,10 @@
         else {
           try {
             state = gen.throw(value);
-            // next(state.value);
             goon(state.value);
           }
-          catch (e) {
-            return reject(e);
+          catch (err) {
+            return reject(err);
           }
         }
       }
@@ -235,8 +237,7 @@
   /** 测试机制: ----------------------------------------------------------------------------------------
    *
    */
-  var defaultTimeout = 2000;
-  var defaultPeriod = 10;
+  var slow = 10;
 
   function newIt(ident, upt, upms) {
     var me = create(itProto);
@@ -244,52 +245,52 @@
 
     function it(topic, any, ms) {
       var t = now(), err;
-      if(upms) {
+      if (upms) {
         var left = upms - (t - upt);
-        if(left<=0) return;  // 已超时，不再进行测试
-        if(!ms) {
+        if (left <= 0) return;  // 已超时，不再进行测试
+        if (!ms) {
           ms = left;
         }
-        else if(ms>left) {
+        else if (ms > left) {
           ms = left;
         }
       }
-      else if(ms) {
+      else if (ms) {
         err = ms;
       }
       me.t = t;
       me.ms = ms;
-      me.log(topic);
+      me.say('log', topic);
       it = newIt(me.ident + '  ', t, ms);
       if (isGeneratorFunction(any)) {
-        if(ms) {
+        if (ms) {
           any = (go(any(it), ms, err));
         }
         else {
           any = go(any(it));
         }
-        any.then(bind(done, it), bind(fault, it)); // .catch(bind(fault, it));
+        any.then(bind(fulfilled, me), bind(rejected, me));
       }
       else if (isAsyncFunction(any)) {
-        any = any(it).then(bind(done, it), bind(fault, it));  //.catch(bind(fault, it));
+        any = any(it).then(bind(fulfilled, me), bind(rejected, me));
       }
       else if (isFunction(any)) {
         try {
           any = any(it);
-          call(done, it);
+          call(fulfilled, me);
         }
-        catch (e) {
-          call(fault, it, e);
+        catch (err) {
+          call(rejected, me, err);
         }
       }
       else if (isGenerator(any)) {
-        if(ms) {
+        if (ms) {
           any = go(any, ms, err);
         }
         else {
           any = go(any);
         }
-        any.then(bind(done, it), bind(fault, it));  //.catch(bind(fault, it));
+        any.then(bind(fulfilled, it), bind(rejected, it));
       }
       return any;
     }
@@ -297,25 +298,28 @@
     return setPrototype(bind(it, me), me);
   }
 
-  function done(value) {
+  /** 测试履约 */
+  function fulfilled(value) {
     var me = this, ms = now() - me.zero;
-    if(ms >= defaultPeriod) {
-      call(mark, me, ms + ' ms');
+    if (ms >= slow) {
+      me.say('mark', ms + 'ms');
     }
     return value;
   }
 
-  function fault(e) {
-    if(isInteger(e)) {
-      call(out, this, 'timeout ' + e + 'ms !');
+  /** 测试被拒 */
+  function rejected(err) {
+    var me = this;
+    if (isInteger(err)) {   // 超时拒绝
+      me.say('out', 'timeout ' + err + 'ms!');
     }
-    else if(isError(e)) {
-      call(error, this, flaw(e));
+    else if (isError(err)) {  // 代码故障
+      sorry(me, err);
     }
-    else if(e === undefined) {
+    else if (err === undefined) { // 静默异常
     }
     else {
-      call(error, this, String(e));
+      me.say('error', String(err));
     }
   }
 
@@ -324,24 +328,24 @@
    */
 
   var itProto = {
-    log: log,
+    say: say,
     delay: delay,
     should: actual
   };
 
   function delay(ms) {
     var me = this;
-    if(me.ms) {
+    if (me.ms) {
       var t = now();
       var left = me.ms - (t - me.t);
-      if(left<=0) throw undefined;  //抛出静默异常，终止后续运行！
-      if(ms>left) ms = left;
+      if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
+      if (ms > left) ms = left;
     }
-    return new Promise(partial(setTimeout, [, ms])).then(function(value){
-      if(me.ms) {
+    return new Promise(partial(setTimeout, [, ms])).then(function (value) {
+      if (me.ms) {
         var t = now();
         var left = me.ms - (t - me.t);
-        if(left<=0) throw undefined;  //抛出静默异常，终止后续运行！
+        if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
       }
       return value;
     });
@@ -349,7 +353,14 @@
 
   function actual(value) {
     var me = create(assertProto);
-    me.topic = statement(Error());
+    var trace = getTrace(Error(), 1);
+    if (trace) {
+      me.topic = trim(trace.code);
+      me.path = trace.path;
+    }
+    else {
+      me.topic = 'unknown assert';
+    }
     me.ident = this.ident;
     me.actual = value;
     me.args = piece(arguments, 1);
@@ -361,6 +372,8 @@
    */
 
   var assertProto = {
+    say: say,
+
     get be() {
       return this
     },
@@ -376,136 +389,100 @@
     },
 
     get true() {
-      var me = this;
-      if(!(me.assert = me.actual ^ me._not))
-        me.note = 'expect ' + toJson(me.actual) + (me._not ? ' not' : '') + ' be true.';
-      report(me);
-      return nop;
+      return bool(this, this.actual, 'true');
     },
 
     get false() {
-      var me = this;
-      if(!(me.assert = !me.actual ^ me._not))
-        me.note = 'expect ' + toJson(me.actual) + (me._not ? ' not' : '') + ' be false.';
-      report(me);
-      return nop;
+      return bool(this, !this.actual, 'false');
     },
 
     get ok() {
-      var me = this;
-      if(!(me.assert = me.actual ^ me._not))
-        me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ok.';
-      report(me);
-      return nop;
+      return bool(this, this.actual, 'ok');
     },
 
     equal: function (value) {
       var me = this;
-      if( !(me.assert = (me.actual == value) ^ me._not))
+      if (!(me.assert = (me.actual == value) ^ me._not))
         me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' equal to ' + toJson(value) + ' .';
       report(me);
     },
 
-    throw: function(err) {
-      var me = this;
-      try{
-        me.actual.apply(undefined, me.args);
-        if(!(me.assert = me._not)){
-          me.note = 'expect' + NOT(me) + ' throw but not throw.';
+    throw: function (err) {
+      var me = this, actual = me.actual;
+      if (isFunction(actual)) {
+        try {
+          me.actual.apply(undefined, me.args);
+          if (!(me.assert = me._not)) {
+            me.note = 'expect' + NOT(me) + ' throw but not throw.';
+          }
         }
+        catch (e) {
+          var message = e.message;
+          if (err) {
+            if (!(me.assert = (message === err) ^ me._not))
+              me.note = 'expect' + NOT(me) + ' throw ' + toJson(err) + ' but throw ' + toJson(message) + '.';
+          }
+          else {
+            if (!(me.assert = !me._not))
+              me.note = 'expect' + NOT(me) + ' throw but throw ' + toJson(message) + '.';
+          }
+        }
+        report(me);
       }
-      catch(e) {
-        var message = e.message;
-        if(err) {
-          if(!(me.assert = (message === err) ^ me._not))
-            me.note = 'expect' + NOT(me) + ' throw ' + toJson(err) + ' but throw ' + toJson(message) + '.';
-        }
-        else {
-          if(!(me.assert = !me._not))
-            me.note = 'expect' + NOT(me) + ' throw but throw ' + toJson(message) + '.';
-        }
+      else {
+        sorry(me, Error('.throw() assert can be only used for function object!'), 1);
       }
-      report(me);
     }
 
   };
 
-  function NOT(me) { return me._not ? ' not' : ''; }
+  function bool(me, assert, word) {
+    if (!(me.assert = assert ^ me._not))
+      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + word + '.';
+    report(me);
+    return nop;
+  }
+
+  function NOT(me) {
+    return me._not ? ' not' : '';
+  }
+
   /** 报告输出: ----------------------------------------------------------------------------------------
    *
    */
   function report(me) {
-    if(me.assert) {
-      call(okey, me, me.topic);
+    if (me.assert) {
+      me.say('okey', me.topic);
     }
     else {
-      call(fail, me, me.topic);
-      if(me.note) {
-        call(note, me, ident(me.note, '  '));
+      me.say('fail', me.topic);
+      if (me.note) {
+        // call(note, me, ident(me.note, '  '));
+        me.say('note', ident(me.note, '  '));
+      }
+      if (me.path) {
+        me.say('note', ident(me.path, '  '));
       }
     }
-    // var topic = me.topic;
-    // var assert = !!me.assert ^ !!me._not;
-    // var op = ops[me.op];
-    // if (assert) {
-    //   call(okey, me, topic);
-    // }
-    // else {
-    //   call(fail, me, topic);
-    //   topic = 'expected ' + toJson(me.actual) + ' ' + op[!me._not & 1];
-    //   if (op[2]) {
-    //     topic += ' ' + toJson(me.value);
-    //   }
-    //   topic = ident(topic, '  ');
-    //   call(note, me, topic);
-    // }
+  }
+
+  /** 报告错误 */
+  function sorry(me, err, level) {
+    var trace = getTrace(err, level);
+    err = err.toString();
+    if (trace) {
+      err += ident('\n' + trace.code + '\n' + dup(' ', trace.col) + '^' + '\nat ' + trace.path, '  ');
+    }
+    me.say('error', err);
   }
 
   var ident = partial(replace, [, /^/gm]);
 
-  function idents(args, blank) {
-    args[0] = ident(args[0], blank);
-    return args;
+  function say(type) {
+    var args = stylize(type, piece(arguments,1));
+    args[0] = ident(args[0], this.ident);
+    apply(console.log, console, args);
   }
-
-  function print(type, args) {
-    apply(console.log, console, idents(stylize(type, args), this.ident));
-  }
-
-  function log() {
-    call(print, this, 'log', arguments);
-  }
-
-  function okey() {
-    call(print, this, 'okey', arguments);
-  }
-
-  function fail() {
-    call(print, this, 'fail', arguments);
-  }
-
-  function note() {
-    call(print, this, 'note', arguments);
-  }
-
-  function mark() {
-    call(print, this, 'mark', arguments);
-  }
-
-  function out() {
-    call(print, this, 'out', arguments);
-  }
-
-  function error() {
-    call(print, this, 'error', arguments);
-  }
-
-  var ops = {
-    ok: ['not ok', 'ok'],
-    equal: ['not equal to', 'equal to', 1],
-    equiv: ['not equivalent to', 'equivalent to', 1],
-    same: ['not be same as', 'be same as', 1]
-  };
 
   var isIdx = bind(_test, /^\d+$/);
   var isIdentifier = bind(_test, /^[A-Za-z_$][\w$]*$/);
@@ -607,7 +584,7 @@
 
   var files = {};
 
-  function fetch(path) {
+  function fetchLines(path) {
     var lines;
     if (!(lines = files[path])) {
       lines = files[path] = get(path).split('\n');

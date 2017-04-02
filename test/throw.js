@@ -1,20 +1,43 @@
 it('Assert throw:', function(it){
-  function raise(err) {
+  it('Error:', function(it){
+    it.should('abc').throw();
+    it.should(123, 456).not.throw();
+    it('end.\n');
+  });
+
+  function throwError(err) {
     if(err) {
       throw Error(err);
     }
   }
-  it.log('okey asserts:');
-  it.should(raise).not.throw();
-  it.should(raise).not.throw('Fail');
-  it.should(raise, 'Wrong').throw('Wrong');
-  it.should(raise, 'Wrong').not.throw('Error');
 
-  it.log('fail asserts:');
-  it.should(raise).throw();
-  it.should(raise, 'Fail').not.throw();
-  it.should(raise, 'Wrong').not.throw('Wrong');
-  it.should(raise, 'Wrong').throw('Error');
+  it('Assert just .throw():', function(it){
+    it('Okey:', function(it){
+      it.should(throwError).not.throw();
+      it.should(throwError, 'Error').throw();
+    });
 
-  it.log('end.');
+    it('Fail:', function(it){
+      it.should(throwError).throw();
+      it.should(throwError, 'Error').not.throw();
+    });
+
+    it('end.\n')
+  });
+
+  it('Assert .throw(err):', function(it){
+    it('Okey:', function(it){
+      it.should(throwError, 'Error').throw('Error');
+      it.should(throwError, 'Error').not.throw('Failure');
+    });
+
+    it('Fail:', function(it){
+      it.should(throwError, 'Error').not.throw('Error');
+      it.should(throwError, 'Error').throw('Failure');
+    });
+
+    it('end.\n')
+  });
+
+  it('end.\n');
 });
