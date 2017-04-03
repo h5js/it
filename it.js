@@ -57,6 +57,7 @@
   var defineProperty = Object.defineProperty;
   var defineProperties = Object.defineProperties;
   var _isPrototypeOf = Object_prototype.isPrototypeOf;
+  var isPrototypeOf = func(_isPrototypeOf);
 
 
   /** --------------------------------------------------------------------------
@@ -115,21 +116,40 @@
    * Promise, Generator, Async Function
    */
   var isPromise = bind(_isPrototypeOf, Promise.prototype);
-  var Generator_prototype = getPrototype(getPrototype(function*() {
-  }()));
+
+  var getFunctionCode = func(String.toString);
+  var GeneratorFunction_prototype = getPrototype(function*(){});
+  var Generator_prototype = getPrototype(GeneratorFunction_prototype);
   var isGenerator = bind(_isPrototypeOf, Generator_prototype);
 
-  function isSyncFunction(any) {
-    return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function ';
+  var AsyncFunction_prototype = getPrototype(async function(){});
+
+  var isNormalCode = bind(_test, /^function /);
+  var isGeneratorCode = bind(_test, /^function\*/);
+  var isAsyncCode = bind(_test, /^async function /);
+  var isArrowCode = bind(_test, /^\(?\s*(?:[\w$]+(?:\s*,\s*[\w$]+)*\s*)?\)?\s*=>/);
+
+  function isNormalFunction(any) {
+    return isFunction(any) && isNormalCode(getFunctionCode(any));
   }
 
-  function isAsyncFunction(any) {
-    return isFunction(any) && Object.toString.call(any).substr(0, 5) === 'async';
+  function isArrowFunction(any) {
+    return isFunction(any) && isArrowCode(getFunctionCode(any));
+  }
+
+  function isSyncFunction(any) {
+    return isFunction(any) && (any = getFunctionCode(any), isNormalCode(any) || isArrowCode(any));
   }
 
   var isGeneratorFunction = function (any) {
-    return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function*';
+    // return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function*';
+    return isPrototypeOf(GeneratorFunction_prototype, any) || isFunction(any) && isGeneratorCode(getFunctionCode(any));
   };
+
+  function isAsyncFunction(any) {
+    // return isFunction(any) && Object.toString.call(any).substr(0, 5) === 'async';
+    return isPrototypeOf(AsyncFunction_prototype, any) || isFunction(any) && isAsyncCode(getFunctionCode(any));
+  }
 
 
   /** 扩展支持: ----------------------------------------------------------------------------------------
@@ -262,25 +282,27 @@
       me.ms = ms;
       me.say('log', topic);
       it = newIt(me.ident + '  ', t, ms);
-      if (isGeneratorFunction(any)) {
-        if (ms) {
-          any = (go(any(it), ms, err));
+      if(isFunction(any)) {
+        if (isGeneratorFunction(any)) {
+          if (ms) {
+            any = (go(any(it), ms, err));
+          }
+          else {
+            any = go(any(it));
+          }
+          any.then(bind(fulfilled, me), bind(rejected, me));
+        }
+        else if (isAsyncFunction(any)) {
+          any = any(it).then(bind(fulfilled, me), bind(rejected, me));
         }
         else {
-          any = go(any(it));
-        }
-        any.then(bind(fulfilled, me), bind(rejected, me));
-      }
-      else if (isAsyncFunction(any)) {
-        any = any(it).then(bind(fulfilled, me), bind(rejected, me));
-      }
-      else if (isFunction(any)) {
-        try {
-          any = any(it);
-          call(fulfilled, me);
-        }
-        catch (err) {
-          call(rejected, me, err);
+          try {
+            any = any(it);
+            call(fulfilled, me);
+          }
+          catch (err) {
+            call(rejected, me, err);
+          }
         }
       }
       else if (isGenerator(any)) {
@@ -374,6 +396,7 @@
   var assertProto = {
     say: say,
 
+    /** assert chain: */
     get be() {
       return this
     },
@@ -382,31 +405,209 @@
       return this;
     },
 
+    get an() {
+      return this;
+    },
+
+    get of() {
+      return this;
+    },
+
+    get a() {
+      return this;
+    },
+
+    get and() {
+      return this;
+    },
+
+    get been() {
+      return this;
+    },
+
+    get have() {
+      return this;
+    },
+
+    get has() {
+      return this;
+    },
+
+    get with() {
+      return this;
+    },
+
+    get is() {
+      return this;
+    },
+
+    get which() {
+      return this;
+    },
+
+    get the() {
+      return this;
+    },
+
+    /** Negation logical: */
     get not() {
       var me = this;
       me._not = !me._not;
       return me;
     },
 
+    /** nothing: */
+    get undefined() {
+      return be(this, this.actual === undefined, 'undefined');
+    },
+
+    get null() {
+      return be(this, this.actual === null, 'null');
+    },
+
+    /** boolean: */
+    get boolean() {
+      return be(this, typeof this.actual === 'boolean', 'boolean value');
+    },
+
+    get Boolean() {
+      return be(this, this.actual instanceof Boolean, 'Boolean object');
+    },
+
     get true() {
-      return bool(this, this.actual, 'true');
+      return be(this, this.actual === true, 'true');
     },
 
     get false() {
-      return bool(this, !this.actual, 'false');
+      return be(this, this.actual === false, 'false');
     },
 
     get ok() {
-      return bool(this, this.actual, 'ok');
+      return be(this, this.actual, 'ok');
     },
 
-    equal: function (value) {
-      var me = this;
-      if (!(me.assert = (me.actual == value) ^ me._not))
-        me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' equal to ' + toJson(value) + ' .';
-      report(me);
+    /** string: */
+    get string() {
+      return be(this, typeof this.actual === 'string', 'string value');
     },
 
+    get String() {
+      return be(this, this.actual instanceof String, 'String object');
+    },
+
+    /** symbol: */
+    get symbol() {
+      return be(this, typeof this.actual === 'symbol', 'symbol value');
+    },
+
+    /** number: */
+    get number() {
+      return be(this, typeof this.actual === 'number', 'number value');
+    },
+
+    get Number() {
+      return be(this, this.actual instanceof Number, 'Number object');
+    },
+
+    get integer() {
+      return be(this, Number.isInteger(this.actual), 'integer value');
+    },
+
+    get safeInteger() {
+      return be(this, Number.isSafeInteger(this.actual), 'safe integer value');
+    },
+
+    get NaN() {
+      return be(this, this.actual !== this.actual, 'NaN');
+    },
+
+    get finite() {
+      return be(this, Number.isFinite(this.actual), 'finite number value');
+    },
+
+    /** object */
+    get object() {
+      return be(this, isObject(this.actual), 'object');
+    },
+
+    get objective() {
+      return be(this, isObjective(this.actual), 'objective');
+    },
+
+    instanceof: function (type) {
+      // TODO
+    },
+
+    /** Function: */
+    get function () {
+      return be(this, isFunction(this.actual), 'function');
+    },
+
+    get SyncFunction() {
+      return be(this, isSyncFunction(this.actual), 'Sync function');
+    },
+
+    get NormalFunction () {
+      return be(this, isNormalFunction(this.actual), 'Normal function');
+    },
+
+    get ArrowFunction() {
+      return be(this, isArrowFunction(this.actual), 'Arrow function');
+    },
+
+    get GeneratorFunction() {
+      return be(this, isGeneratorFunction(this.actual), 'Generator function');
+    },
+
+    get AsyncFunction() {
+      return be(this, isAsyncFunction(this.actual), 'Async function');
+    },
+
+    /** Built-in types: */
+    get Date() {
+      return be(this, this.actual instanceof Date, 'Date object');
+    },
+
+    get Error() {
+      return be(this, this.actual instanceof Error, 'Error object');
+    },
+
+    get RegExp() {
+      return be(this, this.actual instanceof RegExp, 'RegExp object');
+    },
+
+    get Array() {
+      return be(this, this.actual instanceof Array, 'Array object');
+    },
+
+    get Map() {
+      return be(this, this.actual instanceof Map, 'Map object');
+    },
+
+    get Set() {
+      return be(this, this.actual instanceof Set, 'Set object');
+    },
+
+    get ArrayBuffer() {
+      return be(this, this.actual instanceof ArrayBuffer, 'ArrayBuffer object');
+    },
+
+    get Promise() {
+      return be(this, this.actual instanceof Promise, 'Promise object');
+    },
+
+    get Generator() {
+      return be(this, isGenerator(this.actual), 'Generator object');
+    },
+
+    /** Comparision: */
+    equal: equal,
+
+    equiv: equiv,
+
+    same: same,
+
+    /** exception: */
     throw: function (err) {
       var me = this, actual = me.actual;
       if (isFunction(actual)) {
@@ -436,15 +637,54 @@
 
   };
 
-  function bool(me, assert, word) {
+  function NOT(me) {
+    return me._not ? ' not' : '';
+  }
+
+  function be(me, assert, something) {
     if (!(me.assert = assert ^ me._not))
-      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + word + '.';
+      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
     report(me);
     return nop;
   }
 
-  function NOT(me) {
-    return me._not ? ' not' : '';
+  function equal (value) {
+    compare(this, this.actual == value, 'equal to', value);
+  }
+
+  function equiv(value) {
+    compare(this, equiv(this.actual, value), 'equivalent to', value);
+
+    function equiv(a, b) {
+      if(isObject(a) && isObject(b)) {
+        var akeys = [], ai=0, bkeys = [], bi = 0;
+        for(akeys[ai++] in a);
+        for(bkeys[bi++] in b);
+        if(ai !== bi)
+          return false;
+        for(var i=0; i<ai; i++) {
+          var key = akeys[i];
+          if(seek(bkeys, key)<0)
+            return false;
+          if(!equiv(a[key], b[key]))
+            return false;
+        }
+        return true;
+      }
+      else {
+        return a!==a && b!==b || a == b;
+      }
+    }
+  }
+
+  function same(value){
+    compare(this, this.actual === value, 'same to', value);
+  }
+
+  function compare(me, assert, op, value) {
+    if (!(me.assert = assert ^ me._not))
+      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' ' + op + ' ' + toJson(value) + '.';
+    report(me);
   }
 
   /** 报告输出: ----------------------------------------------------------------------------------------
@@ -479,7 +719,7 @@
   var ident = partial(replace, [, /^/gm]);
 
   function say(type) {
-    var args = stylize(type, piece(arguments,1));
+    var args = stylize(type, piece(arguments, 1));
     args[0] = ident(args[0], this.ident);
     apply(console.log, console, args);
   }

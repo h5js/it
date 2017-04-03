@@ -5,9 +5,9 @@ it('Boolean asserts:', function* (it){
       it.should(false).not.be.true;
       it.should(true).be.true();
       it.should(false).not.be.true();
-      it.should(1).be.true;
+      it.should(1).not.be.true;
       it.should(0).not.be.true;
-      it.should(1).be.true();
+      it.should(1).not.be.true();
       it.should(0).not.be.true();
     });
 
@@ -17,12 +17,12 @@ it('Boolean asserts:', function* (it){
       it.should(false).be.true();
       it.should(true).not.be.true();
       it.should(0).be.true;
-      it.should(1).not.be.true;
+      it.should(1).be.true;
       it.should(0).be.true();
-      it.should(1).not.be.true();
+      it.should(1).be.true();
     });
 
-    it.log('ends.');
+    it('ends.');
   });
 
   it('.false / .false() asserts:', function(it){
@@ -31,9 +31,9 @@ it('Boolean asserts:', function* (it){
       it.should(true).not.be.false;
       it.should(false).be.false();
       it.should(true).not.be.false();
-      it.should(0).be.false;
+      it.should(0).not.be.false;
       it.should(1).not.be.false;
-      it.should(0).be.false();
+      it.should(0).not.be.false();
       it.should(1).not.be.false();
     });
 
@@ -43,12 +43,12 @@ it('Boolean asserts:', function* (it){
       it.should(true).be.false();
       it.should(false).not.be.false();
       it.should(1).be.false;
-      it.should(0).not.be.false;
+      it.should(0).be.false;
       it.should(1).be.false();
-      it.should(0).not.be.false();
+      it.should(0).be.false();
     });
 
-    it.log('ends.');
+    it('ends.');
   });
 
   it('.ok / .ok() asserts:', function(it){
@@ -74,6 +74,6 @@ it('Boolean asserts:', function* (it){
       it.should(1).not.be.ok();
     });
 
-    it.log('ends.');
+    it('ends.');
   });
 });

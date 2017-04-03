@@ -13,5 +13,5 @@ it('.equal() asserts:', function(it){
     it.should('123').not.equal(123);
   });
 
-  it.log('end.');
+  it('end.');
 });
