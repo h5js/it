@@ -2,7 +2,7 @@
  * The most simplest test library in the world for JavaScript.
  */
 
-(function (Function, Object, Number, String, Array, RegExp, Date, Error, Promise) {
+(function (global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise) {
 
   /** 基础支持: ----------------------------------------------------------------------------------------
    *
@@ -76,6 +76,7 @@
   var indexOf = func(String_prototype.indexOf);
   var replace = func(String_prototype.replace);
   var match = func(String_prototype.match);
+  var split = func(String_prototype.split);
 
   function dup(x, n) {
     for (var dup = ''; n-- > 0;) dup += x;
@@ -121,10 +122,12 @@
   var isPromise = bind(_isPrototypeOf, Promise.prototype);
 
   var getFunctionCode = func(String.toString);
-  var GeneratorFunction_prototype = getPrototype(function*(){});
+  var GeneratorFunction_prototype = getPrototype(function*() {
+  });
   var isGenerator = bind(_isPrototypeOf, GeneratorFunction_prototype.prototype);
 
-  var AsyncFunction_prototype = getPrototype(async function(){});
+  var AsyncFunction_prototype = getPrototype(async function () {
+  });
 
   var isNormalCode = bind(_test, /^function /);
   var isGeneratorCode = bind(_test, /^function\*/);
@@ -158,24 +161,25 @@
    *
    */
 
-  var reTraces = /(?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?(?:#.*)?:\d+:\d+/g;
-  var reTrace = /((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
-
+  var reTraces = /(?:https?:\/\/[\w.-]+(?::\d+)?|)[\w./-]+(?:\?.*|):\d+:\d+/g;
+  var reTrace = /((?:https?:\/\/[\w.-]+(?::\d+)?|)[\w./-]+(?:\?.*|)):(\d+):(\d+)/;
+  // var reTrace = /(((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+)(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
   /** 获取错误追踪信息 */
   function getTrace(err, level) {
-    var ms, trace, lines;
+    var ms, trace, codes;
     if (ms = match(err.stack, reTraces)) {
       if (!isInteger(level))
         level = 0;
       if ((ms = ms[level]) && (ms = match(ms, reTrace))) {
-        var row = ms[2] - 1, col = ms[3] - 1;
+        var path = ms[1], row = ms[2] - 1, col = ms[3] - 1;
         trace = {
-          path: ms[0],
+          loc: ms[0],
+          path: path,
           row: row,
           col: col
         };
-        if ((lines = fetchLines(ms[1])) && row < lines.length) {
-          trace.code = lines[row];
+        if ((codes = getCodes(path)) && row < codes.length) {
+          trace.code = codes[row];
         }
         else {
           trace.code = '"unknown source code";'
@@ -183,6 +187,55 @@
         return trace;
       }
     }
+  }
+
+  /**
+   * purl(url, rel)
+   *  计算相对路径并规格化
+   */
+  var reUrl = /^(https?:\/\/[\w-.]+(?::\d+)?|)([\w\/.-]+)(.*|)/;
+  var reRel = /^(https?:\/\/[\w-.]+(?::\d+)?|)(\/(?:[\w.-]+\/)*)/;
+
+  function purl(url, rel) {
+    var ms = match(url, reUrl);
+    if (ms && !ms[1] && (rel = match(rel, reRel))) {
+      url = ms[2];
+      if (url[0] !== '/') {
+        url = rel[2] + url;
+      }
+      url = rel[1] + furl(url) + ms[3];
+    }
+    return url;
+  }
+
+  var reSlash = /\/+/;
+
+  function furl(src) {
+    var des = [];
+    src = split(src, reSlash);
+    for (var i = 0, l = src.length; i < l; i++) {
+      var sym = src[i];
+      if (des.length) {
+        if (sym != '.') {
+          var end = peak(des);
+          if (sym != '..') {
+            if (end == '.' && sym)
+              pop(des);
+            push(des, sym);
+          }
+          else if (end == '..') {
+            push(des, sym);
+          }
+          else if (end) {
+            pop(des);
+          }
+        }
+      }
+      else {
+        push(des, sym);
+      }
+    }
+    return join(des, '/');
   }
 
   /** 运行机制: ----------------------------------------------------------------------------------------
@@ -284,7 +337,7 @@
       me.ms = ms;
       me.say('log', topic);
       it = newIt(me.ident + '  ', t, ms);
-      if(isFunction(any)) {
+      if (isFunction(any)) {
         if (isGeneratorFunction(any)) {
           if (ms) {
             any = (go(any(it), ms, err));
@@ -380,7 +433,7 @@
     var trace = getTrace(Error(), 1);
     if (trace) {
       me.topic = trim(trace.code);
-      me.path = trace.path;
+      me.loc = trace.loc;
     }
     else {
       me.topic = 'unknown assert';
@@ -549,7 +602,7 @@
       return be(this, isSyncFunction(this.actual), 'Sync function');
     },
 
-    get NormalFunction () {
+    get NormalFunction() {
       return be(this, isNormalFunction(this.actual), 'Normal function');
     },
 
@@ -644,13 +697,13 @@
   }
 
   function be(me, assert, something) {
-    if (!(me.assert = assert ^ me._not))
+    if (!(me.assert = !!assert ^ me._not))
       me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
     report(me);
     return nop;
   }
 
-  function equal (value) {
+  function equal(value) {
     compare(this, this.actual == value, 'equal to', value);
   }
 
@@ -658,33 +711,33 @@
     compare(this, equiv(this.actual, value), 'equivalent to', value);
 
     function equiv(a, b) {
-      if(isObject(a) && isObject(b)) {
-        var akeys = [], ai=0, bkeys = [], bi = 0;
-        for(akeys[ai++] in a);
-        for(bkeys[bi++] in b);
-        if(ai !== bi)
+      if (isObject(a) && isObject(b)) {
+        var akeys = [], ai = 0, bkeys = [], bi = 0;
+        for (akeys[ai++] in a);
+        for (bkeys[bi++] in b);
+        if (ai !== bi)
           return false;
-        for(var i=0; i<ai; i++) {
+        for (var i = 0; i < ai; i++) {
           var key = akeys[i];
-          if(seek(bkeys, key)<0)
+          if (seek(bkeys, key) < 0)
             return false;
-          if(!equiv(a[key], b[key]))
+          if (!equiv(a[key], b[key]))
             return false;
         }
         return true;
       }
       else {
-        return a!==a && b!==b || a == b;
+        return a !== a && b !== b || a == b;
       }
     }
   }
 
-  function same(value){
+  function same(value) {
     compare(this, this.actual === value, 'same to', value);
   }
 
   function compare(me, assert, op, value) {
-    if (!(me.assert = assert ^ me._not))
+    if (!(me.assert = !!assert ^ me._not))
       me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' ' + op + ' ' + toJson(value) + '.';
     report(me);
   }
@@ -702,8 +755,8 @@
         // call(note, me, ident(me.note, '  '));
         me.say('note', ident(me.note, '  '));
       }
-      if (me.path) {
-        me.say('note', ident(me.path, '  '));
+      if (me.loc) {
+        me.say('note', ident(me.loc, '  '));
       }
     }
   }
@@ -713,7 +766,7 @@
     var trace = getTrace(err, level);
     err = err.toString();
     if (trace) {
-      err += ident('\n' + trace.code + '\n' + dup(' ', trace.col) + '^' + '\nat ' + trace.path, '  ');
+      err += ident('\n' + trace.code + '\n' + dup(' ', trace.col) + '^' + '\nat ' + trace.loc, '  ');
     }
     me.say('error', err);
   }
@@ -772,11 +825,15 @@
   /** 运行环境: ----------------------------------------------------------------------------------------
    *
    */
+  var it = newIt('');
   var get;
   var stylize, styles;
 
-  if (this.window) {
-    this.it = newIt('');
+  if (global.window) {
+    var script = document.scripts[document.scripts.length-1];
+    var name = script.getAttribute('var');
+    if(name) global[name] = it;
+
     get = function (path) {
       var http = new XMLHttpRequest;
       http.open('GET', path, false);
@@ -784,7 +841,27 @@
       return http.status / 100 ^ 2 ? '' : http.responseText;
     };
 
-    //
+    var cacheExports = {};
+    var url = purl(script.getAttribute('src'), location.href);
+    cacheExports[url] = it;
+
+    global.require = function (url) {
+      var exports;
+      url = purl(url, getTrace(Error(), 1).path);
+      if (cacheExports.hasOwnProperty(url)) {
+        exports = cacheExports[url];
+      }
+      else {
+        var code = getCode(url) + '\n//# sourceURL=' + url;
+        var module = {exports: {}};
+        (function (module, exports) {
+          eval(arguments[2]);
+        })(module, module.exports, code);
+        exports = cacheExports[url] = module.exports;
+      }
+      return exports;
+    };
+
     styles = {
       log: {icon: '%c', color: 'sliver'},
       okey: {icon: '%c✔ ', color: 'lime'},
@@ -802,7 +879,7 @@
     };
   }
   else {
-    module.exports = newIt('');
+    module.exports = it;
     var fs = require('fs');
     get = function (path) {
       return fs.readFileSync(path, {encoding: 'utf-8'});
@@ -824,14 +901,29 @@
     };
   }
 
-  var files = {};
-
-  function fetchLines(path) {
-    var lines;
-    if (!(lines = files[path])) {
-      lines = files[path] = get(path).split('\n');
+  var cacheCode = {};
+  function getCode(path) {
+    var code;
+    if(cacheCode.hasOwnProperty(path)) {
+      code = cacheCode[path];
     }
-    return lines;
+    else {
+      code = cacheCode[path] = get(path);
+    }
+    return code;
   }
 
-})(Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
+  var cacheCodes = {};
+
+  function getCodes(path) {
+    var codes;
+    if(cacheCodes.hasOwnProperty(path)) {
+      codes = cacheCodes[path];
+    }
+    else {
+      codes = cacheCodes[path] = getCode(path).split('\n');
+    }
+    return codes;
+  }
+
+})(this.window || global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
