@@ -2,7 +2,7 @@
  * The most simplest test library in the world for JavaScript.
  */
 
-(function () {
+(function (Function, Object, Number, String, Array, RegExp, Date, Error, Promise) {
 
   /** 基础支持: ----------------------------------------------------------------------------------------
    *
@@ -50,8 +50,6 @@
     return isObject(any) && !isFunction(any);
   }
 
-  var isInteger = Number.isInteger;
-
   var getPrototype = Object.getPrototypeOf;
   var setPrototype = Object.setPrototypeOf;
   var defineProperty = Object.defineProperty;
@@ -59,6 +57,11 @@
   var _isPrototypeOf = Object_prototype.isPrototypeOf;
   var isPrototypeOf = func(_isPrototypeOf);
 
+
+  /** --------------------------------------------------------------------------
+   * Number
+   */
+  var isInteger = Number.isInteger;
 
   /** --------------------------------------------------------------------------
    * String
@@ -831,4 +834,4 @@
     return lines;
   }
 
-})();
+})(Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
