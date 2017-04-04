@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 global.it = require('./src/it.js');
-var arg = process.argv[2];
-if(arg[0] !== '/') arg = './'+arg;
-require(arg);
+var arg;
+if( arg = process.argv[2]) {
+  if (arg[0] !== '/') arg = './' + arg;
+  require(arg);
+}
+else {
+  console.log('Usage: it your-test.js');
+}
