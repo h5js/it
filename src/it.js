@@ -119,8 +119,7 @@
 
   var getFunctionCode = func(String.toString);
   var GeneratorFunction_prototype = getPrototype(function*(){});
-  var Generator_prototype = getPrototype(GeneratorFunction_prototype);
-  var isGenerator = bind(_isPrototypeOf, Generator_prototype);
+  var isGenerator = bind(_isPrototypeOf, GeneratorFunction_prototype.prototype);
 
   var AsyncFunction_prototype = getPrototype(async function(){});
 
@@ -456,7 +455,7 @@
       return me;
     },
 
-    /** nothing: */
+    /** Empty: */
     get undefined() {
       return be(this, this.actual === undefined, 'undefined');
     },
@@ -465,7 +464,7 @@
       return be(this, this.actual === null, 'null');
     },
 
-    /** boolean: */
+    /** Boolean: */
     get boolean() {
       return be(this, typeof this.actual === 'boolean', 'boolean value');
     },
@@ -486,7 +485,7 @@
       return be(this, this.actual, 'ok');
     },
 
-    /** string: */
+    /** String: */
     get string() {
       return be(this, typeof this.actual === 'string', 'string value');
     },
@@ -495,12 +494,12 @@
       return be(this, this.actual instanceof String, 'String object');
     },
 
-    /** symbol: */
+    /** Symbol: */
     get symbol() {
       return be(this, typeof this.actual === 'symbol', 'symbol value');
     },
 
-    /** number: */
+    /** Number: */
     get number() {
       return be(this, typeof this.actual === 'number', 'number value');
     },
@@ -525,7 +524,7 @@
       return be(this, Number.isFinite(this.actual), 'finite number value');
     },
 
-    /** object */
+    /** Object */
     get object() {
       return be(this, isObject(this.actual), 'object');
     },
