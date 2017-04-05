@@ -879,6 +879,25 @@
     };
   }
   else {
+    it.purl = purl;
+    it.run = function(file) {
+      var _Error = Error;
+      Error = function (){
+        var error = apply(_Error, {}, arguments);
+        var stack = error.stack.split('\n');
+        splice(stack, 1,1);
+        stack[2] = replace(stack[2], /(at ).*(:\d+:\d+\))$/, '$1 it.run(' + file + '$2');
+        error.stack = stack.join('\n');
+        return error;
+      };
+      try {
+        return eval(getCode(arguments[0]));
+      }
+      finally{
+        Error = _Error;
+      }
+    };
+
     module.exports = it;
     var fs = require('fs');
     get = function (path) {
