@@ -901,8 +901,7 @@
 
       var module = { exports: {} };
       try {
-        // return eval.call({}, getCode(file));
-        return modulize(module, module.exports, getCode(file));
+        return eval.call(undefined, getCode(file));
       }
       finally {
         rejected = _rejected;
