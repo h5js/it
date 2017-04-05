@@ -2,7 +2,7 @@
  * The most simplest test library in the world for JavaScript.
  */
 
-(function (global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise) {
+(function (modulize, global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise) {
 
   /** 基础支持: ----------------------------------------------------------------------------------------
    *
@@ -385,7 +385,7 @@
   }
 
   /** 测试被拒 */
-  function rejected(err) {
+  var rejected = function (err) {
     var me = this;
     if (isInteger(err)) {   // 超时拒绝
       me.say('out', 'timeout ' + err + 'ms!');
@@ -398,7 +398,7 @@
     else {
       me.say('error', String(err));
     }
-  }
+  };
 
   /** it 原型: ----------------------------------------------------------------------------------------
    *
@@ -624,7 +624,7 @@
     },
 
     get Error() {
-      return be(this, this.actual instanceof Error, 'Error object');
+      return be(this, isError(this.actual), 'Error object');
     },
 
     get RegExp() {
@@ -830,9 +830,9 @@
   var stylize, styles;
 
   if (global.window) {
-    var script = document.scripts[document.scripts.length-1];
+    var script = document.scripts[document.scripts.length - 1];
     var name = script.getAttribute('var');
-    if(name) global[name] = it;
+    if (name) global[name] = it;
 
     get = function (path) {
       var http = new XMLHttpRequest;
@@ -854,10 +854,10 @@
       else {
         var code = getCode(url) + '\n//# sourceURL=' + url;
         var module = {exports: {}};
-        (function (module, exports) {
-          eval(arguments[2]);
-        })(module, module.exports, code);
-        exports = cacheExports[url] = module.exports;
+        // (function (module, exports) {
+        //   eval(arguments[2]);
+        // })(module, module.exports, code);
+        exports = cacheExports[url] = modulize(module, module.exports, code);
       }
       return exports;
     };
@@ -879,21 +879,33 @@
     };
   }
   else {
+    var reEval = /eval at it.run [^<]*<anonymous>/g;
+
     it.purl = purl;
-    it.run = function(file) {
+    it.run = function (file) {
       var _Error = Error;
-      Error = function (){
-        var error = apply(_Error, {}, arguments);
-        var stack = error.stack.split('\n');
-        splice(stack, 1,1);
-        stack[2] = replace(stack[2], /(at ).*(:\d+:\d+\))$/, '$1 it.run(' + file + '$2');
+      Error = function () {
+        var error = _Error.apply({}, arguments);
+        var stack = error.stack.replace(reEval, file);
+        stack = stack.split('\n');
+        splice(stack, 1, 1);
         error.stack = stack.join('\n');
         return error;
       };
+
+      var _rejected = rejected;
+      rejected = function (err) {
+        err.stack = err.stack.replace(reEval, file);
+        call(_rejected, this, err);
+      };
+
+      var module = { exports: {} };
       try {
-        return eval(getCode(arguments[0]));
+        // return eval.call({}, getCode(file));
+        return modulize(module, module.exports, getCode(file));
       }
-      finally{
+      finally {
+        rejected = _rejected;
         Error = _Error;
       }
     };
@@ -921,9 +933,10 @@
   }
 
   var cacheCode = {};
+
   function getCode(path) {
     var code;
-    if(cacheCode.hasOwnProperty(path)) {
+    if (cacheCode.hasOwnProperty(path)) {
       code = cacheCode[path];
     }
     else {
@@ -936,7 +949,7 @@
 
   function getCodes(path) {
     var codes;
-    if(cacheCodes.hasOwnProperty(path)) {
+    if (cacheCodes.hasOwnProperty(path)) {
       codes = cacheCodes[path];
     }
     else {
@@ -945,4 +958,10 @@
     return codes;
   }
 
-})(this.window || global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
+})(
+  function modulize(module, exports) {
+    'use strict';
+    eval(arguments[2]);
+    return module.exports;
+  },
+  this.window || global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
