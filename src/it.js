@@ -122,12 +122,10 @@
   var isPromise = bind(_isPrototypeOf, Promise.prototype);
 
   var getFunctionCode = func(String.toString);
-  var GeneratorFunction_prototype = getPrototype(function*() {
-  });
+  var GeneratorFunction_prototype = getPrototype(function*() {});
   var isGenerator = bind(_isPrototypeOf, GeneratorFunction_prototype.prototype);
 
-  var AsyncFunction_prototype = getPrototype(async function () {
-  });
+  // var AsyncFunction_prototype = getPrototype(async function(){});
 
   var isNormalCode = bind(_test, /^function /);
   var isGeneratorCode = bind(_test, /^function\*/);
@@ -147,13 +145,12 @@
   }
 
   var isGeneratorFunction = function (any) {
-    // return isFunction(any) && Object.toString.call(any).substr(0, 9) === 'function*';
     return isPrototypeOf(GeneratorFunction_prototype, any) || isFunction(any) && isGeneratorCode(getFunctionCode(any));
   };
 
   function isAsyncFunction(any) {
-    // return isFunction(any) && Object.toString.call(any).substr(0, 5) === 'async';
-    return isPrototypeOf(AsyncFunction_prototype, any) || isFunction(any) && isAsyncCode(getFunctionCode(any));
+    // return isPrototypeOf(AsyncFunction_prototype, any) || isFunction(any) && isAsyncCode(getFunctionCode(any));
+    return isFunction(any) && isAsyncCode(getFunctionCode(any));
   }
 
 
@@ -168,15 +165,11 @@
   function getTrace(err, level) {
     var ms, trace, codes;
     if (ms = match(err.stack, reTraces)) {
-      if (!isInteger(level))
-        level = 0;
+      if (!isInteger(level)) level = 0;
       if ((ms = ms[level]) && (ms = match(ms, reTrace))) {
         var path = ms[1], row = ms[2] - 1, col = ms[3] - 1;
         trace = {
-          loc: ms[0],
-          path: path,
-          row: row,
-          col: col
+          loc: ms[0], path: path, row: row, col: col
         };
         if ((codes = getCodes(path)) && row < codes.length) {
           trace.code = codes[row];
@@ -219,8 +212,7 @@
         if (sym != '.') {
           var end = peak(des);
           if (sym != '..') {
-            if (end == '.' && sym)
-              pop(des);
+            if (end == '.' && sym) pop(des);
             push(des, sym);
           }
           else if (end == '..') {
@@ -256,8 +248,7 @@
       function next(value) {
         try {
           state = gen.next(value);
-        }
-        catch (err) {
+        } catch (err) {
           return reject(err);
         }
         value = state.value;
@@ -300,8 +291,7 @@
           try {
             state = gen.throw(value);
             goon(state.value);
-          }
-          catch (err) {
+          } catch (err) {
             return reject(err);
           }
         }
@@ -354,8 +344,7 @@
           try {
             any = any(it);
             call(fulfilled, me);
-          }
-          catch (err) {
+          } catch (err) {
             call(rejected, me, err);
           }
         }
@@ -405,9 +394,7 @@
    */
 
   var itProto = {
-    say: say,
-    delay: delay,
-    should: actual
+    say: say, delay: delay, should: actual
   };
 
   function delay(ms) {
@@ -452,57 +439,19 @@
     say: say,
 
     /** assert chain: */
-    get be() {
-      return this
-    },
-
-    get should() {
-      return this;
-    },
-
-    get an() {
-      return this;
-    },
-
-    get of() {
-      return this;
-    },
-
-    get a() {
-      return this;
-    },
-
-    get and() {
-      return this;
-    },
-
-    get been() {
-      return this;
-    },
-
-    get have() {
-      return this;
-    },
-
-    get has() {
-      return this;
-    },
-
-    get with() {
-      return this;
-    },
-
-    get is() {
-      return this;
-    },
-
-    get which() {
-      return this;
-    },
-
-    get the() {
-      return this;
-    },
+    get be() { return this },
+    get should() { return this },
+    get an() { return this },
+    get of() { return this },
+    get a() { return this },
+    get and() { return this },
+    get been() { return this },
+    get have() { return this },
+    get has() { return this },
+    get with() { return this },
+    get is() { return this },
+    get which() { return this },
+    get the() { return this },
 
     /** Negation logical: */
     get not() {
@@ -512,154 +461,61 @@
     },
 
     /** Empty: */
-    get undefined() {
-      return be(this, this.actual === undefined, 'undefined');
-    },
-
-    get null() {
-      return be(this, this.actual === null, 'null');
-    },
+    get undefined() { return be(this, this.actual === undefined, 'undefined') },
+    get null() { return be(this, this.actual === null, 'null') },
 
     /** Boolean: */
-    get boolean() {
-      return be(this, typeof this.actual === 'boolean', 'boolean value');
-    },
-
-    get Boolean() {
-      return be(this, this.actual instanceof Boolean, 'Boolean object');
-    },
-
-    get true() {
-      return be(this, this.actual === true, 'true');
-    },
-
-    get false() {
-      return be(this, this.actual === false, 'false');
-    },
-
-    get ok() {
-      return be(this, this.actual, 'ok');
-    },
+    get boolean() { return be(this, typeof this.actual === 'boolean', 'boolean value') },
+    get Boolean() { return be(this, this.actual instanceof Boolean, 'Boolean object') },
+    get true() { return be(this, this.actual === true, 'true') },
+    get false() { return be(this, this.actual === false, 'false') },
+    get ok() { return be(this, this.actual, 'ok') },
 
     /** String: */
-    get string() {
-      return be(this, typeof this.actual === 'string', 'string value');
-    },
-
-    get String() {
-      return be(this, this.actual instanceof String, 'String object');
-    },
+    get string() { return be(this, typeof this.actual === 'string', 'string value') },
+    get String() { return be(this, this.actual instanceof String, 'String object') },
 
     /** Symbol: */
-    get symbol() {
-      return be(this, typeof this.actual === 'symbol', 'symbol value');
-    },
+    get symbol() { return be(this, typeof this.actual === 'symbol', 'symbol value') },
 
     /** Number: */
-    get number() {
-      return be(this, typeof this.actual === 'number', 'number value');
-    },
-
-    get Number() {
-      return be(this, this.actual instanceof Number, 'Number object');
-    },
-
-    get integer() {
-      return be(this, Number.isInteger(this.actual), 'integer value');
-    },
-
-    get safeInteger() {
-      return be(this, Number.isSafeInteger(this.actual), 'safe integer value');
-    },
-
-    get NaN() {
-      return be(this, this.actual !== this.actual, 'NaN');
-    },
-
-    get finite() {
-      return be(this, Number.isFinite(this.actual), 'finite number value');
-    },
+    get number() { return be(this, typeof this.actual === 'number', 'number value') },
+    get Number() { return be(this, this.actual instanceof Number, 'Number object') },
+    get integer() { return be(this, Number.isInteger(this.actual), 'integer value') },
+    get safeInteger() { return be(this, Number.isSafeInteger(this.actual), 'safe integer value') },
+    get NaN() { return be(this, this.actual !== this.actual, 'NaN') },
+    get finite() { return be(this, Number.isFinite(this.actual), 'finite number value') },
 
     /** Object */
-    get object() {
-      return be(this, isObject(this.actual), 'object');
-    },
-
-    get objective() {
-      return be(this, isObjective(this.actual), 'objective');
-    },
+    get object() { return be(this, isObject(this.actual), 'object') },
+    get objective() { return be(this, isObjective(this.actual), 'objective') },
 
     instanceof: function (type) {
       // TODO
     },
 
     /** Function: */
-    get function () {
-      return be(this, isFunction(this.actual), 'function');
-    },
-
-    get SyncFunction() {
-      return be(this, isSyncFunction(this.actual), 'Sync function');
-    },
-
-    get NormalFunction() {
-      return be(this, isNormalFunction(this.actual), 'Normal function');
-    },
-
-    get ArrowFunction() {
-      return be(this, isArrowFunction(this.actual), 'Arrow function');
-    },
-
-    get GeneratorFunction() {
-      return be(this, isGeneratorFunction(this.actual), 'Generator function');
-    },
-
-    get AsyncFunction() {
-      return be(this, isAsyncFunction(this.actual), 'Async function');
-    },
+    get function () { return be(this, isFunction(this.actual), 'function') },
+    get SyncFunction() { return be(this, isSyncFunction(this.actual), 'Sync function') },
+    get NormalFunction() { return be(this, isNormalFunction(this.actual), 'Normal function') },
+    get ArrowFunction() { return be(this, isArrowFunction(this.actual), 'Arrow function') },
+    get GeneratorFunction() { return be(this, isGeneratorFunction(this.actual), 'Generator function') },
+    get AsyncFunction() { return be(this, isAsyncFunction(this.actual), 'Async function') },
 
     /** Built-in types: */
-    get Date() {
-      return be(this, this.actual instanceof Date, 'Date object');
-    },
-
-    get Error() {
-      return be(this, isError(this.actual), 'Error object');
-    },
-
-    get RegExp() {
-      return be(this, this.actual instanceof RegExp, 'RegExp object');
-    },
-
-    get Array() {
-      return be(this, this.actual instanceof Array, 'Array object');
-    },
-
-    get Map() {
-      return be(this, this.actual instanceof Map, 'Map object');
-    },
-
-    get Set() {
-      return be(this, this.actual instanceof Set, 'Set object');
-    },
-
-    get ArrayBuffer() {
-      return be(this, this.actual instanceof ArrayBuffer, 'ArrayBuffer object');
-    },
-
-    get Promise() {
-      return be(this, this.actual instanceof Promise, 'Promise object');
-    },
-
-    get Generator() {
-      return be(this, isGenerator(this.actual), 'Generator object');
-    },
+    get Date() { return be(this, this.actual instanceof Date, 'Date object') },
+    get Error() { return be(this, isError(this.actual), 'Error object') },
+    get RegExp() { return be(this, this.actual instanceof RegExp, 'RegExp object') },
+    get Array() { return be(this, this.actual instanceof Array, 'Array object') },
+    get Map() { return be(this, this.actual instanceof Map, 'Map object') },
+    get Set() { return be(this, this.actual instanceof Set, 'Set object') },
+    get ArrayBuffer() { return be(this, this.actual instanceof ArrayBuffer, 'ArrayBuffer object') },
+    get Promise() { return be(this, this.actual instanceof Promise, 'Promise object') },
+    get Generator() { return be(this, isGenerator(this.actual), 'Generator object') },
 
     /** Comparision: */
     equal: equal,
-
     equiv: equiv,
-
     same: same,
 
     /** exception: */
@@ -671,16 +527,13 @@
           if (!(me.assert = me._not)) {
             me.note = 'expect' + NOT(me) + ' throw but not throw.';
           }
-        }
-        catch (e) {
+        } catch (e) {
           var message = e.message;
           if (err) {
-            if (!(me.assert = (message === err) ^ me._not))
-              me.note = 'expect' + NOT(me) + ' throw ' + toJson(err) + ' but throw ' + toJson(message) + '.';
+            if (!(me.assert = (message === err) ^ me._not)) me.note = 'expect' + NOT(me) + ' throw ' + toJson(err) + ' but throw ' + toJson(message) + '.';
           }
           else {
-            if (!(me.assert = !me._not))
-              me.note = 'expect' + NOT(me) + ' throw but throw ' + toJson(message) + '.';
+            if (!(me.assert = !me._not)) me.note = 'expect' + NOT(me) + ' throw but throw ' + toJson(message) + '.';
           }
         }
         report(me);
@@ -692,20 +545,15 @@
 
   };
 
-  function NOT(me) {
-    return me._not ? ' not' : '';
-  }
+  function NOT(me) { return me._not ? ' not' : '' }
 
   function be(me, assert, something) {
-    if (!(me.assert = !!assert ^ me._not))
-      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
+    if (!(me.assert = !!assert ^ me._not)) me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
     report(me);
     return nop;
   }
 
-  function equal(value) {
-    compare(this, this.actual == value, 'equal to', value);
-  }
+  function equal(value) { compare(this, this.actual == value, 'equal to', value) }
 
   function equiv(value) {
     compare(this, equiv(this.actual, value), 'equivalent to', value);
@@ -732,13 +580,10 @@
     }
   }
 
-  function same(value) {
-    compare(this, this.actual === value, 'same to', value);
-  }
+  function same(value) { compare(this, this.actual === value, 'same to', value) }
 
   function compare(me, assert, op, value) {
-    if (!(me.assert = !!assert ^ me._not))
-      me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' ' + op + ' ' + toJson(value) + '.';
+    if (!(me.assert = !!assert ^ me._not)) me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' ' + op + ' ' + toJson(value) + '.';
     report(me);
   }
 
@@ -899,11 +744,10 @@
         call(_rejected, this, err);
       };
 
-      var module = { exports: {} };
+      var module = {exports: {}};
       try {
         return eval.call(undefined, getCode(file));
-      }
-      finally {
+      } finally {
         rejected = _rejected;
         Error = _Error;
       }
@@ -957,10 +801,8 @@
     return codes;
   }
 
-})(
-  function modulize(module, exports) {
-    'use strict';
-    eval(arguments[2]);
-    return module.exports;
-  },
-  this.window || global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
+})(function modulize(module, exports) {
+  'use strict';
+  eval(arguments[2]);
+  return module.exports;
+}, this.window || global, Function, Object, Number, String, Array, RegExp, Date, Error, Promise);
