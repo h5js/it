@@ -52,8 +52,6 @@
 
   var getPrototype = Object.getPrototypeOf;
   var setPrototype = Object.setPrototypeOf;
-  var defineProperty = Object.defineProperty;
-  var defineProperties = Object.defineProperties;
   var _isPrototypeOf = Object_prototype.isPrototypeOf;
   var isPrototypeOf = func(_isPrototypeOf);
 
@@ -73,7 +71,6 @@
   }
 
   var trim = func(String_prototype.trim);
-  var indexOf = func(String_prototype.indexOf);
   var replace = func(String_prototype.replace);
   var match = func(String_prototype.match);
   var split = func(String_prototype.split);
@@ -90,7 +87,6 @@
   var isArray = Array.isArray;
   var seek = func(Array_prototype.indexOf);
   var join = func(Array_prototype.join);
-  var unite = func(Array_prototype.concat);
   var piece = func(Array_prototype.slice);
   var splice = func(Array_prototype.splice);
   var push = func(Array_prototype.push);
@@ -141,7 +137,7 @@
   }
 
   function isSyncFunction(any) {
-    return isFunction(any) && (any = getFunctionCode(any), isNormalCode(any) || isArrowCode(any));
+    return isFunction(any) && ((any = getFunctionCode(any)) && isNormalCode(any) || isArrowCode(any));
   }
 
   var isGeneratorFunction = function (any) {
@@ -169,7 +165,10 @@
       if ((ms = ms[level]) && (ms = match(ms, reTrace))) {
         var path = ms[1], row = ms[2] - 1, col = ms[3] - 1;
         trace = {
-          loc: ms[0], path: path, row: row, col: col
+          loc: ms[0],
+          path: path,
+          row: row,
+          col: col
         };
         if ((codes = getCodes(path)) && row < codes.length) {
           trace.code = codes[row];
@@ -268,7 +267,7 @@
         if (gen.done) {
           if (!state.done) {
             state = gen.return();
-            clearTimeout(gen.timer);
+            clearTimeout(timer);
           }
         }
         else if (state.done) {
@@ -302,16 +301,17 @@
   /** 测试机制: ----------------------------------------------------------------------------------------
    *
    */
-  var slow = 10;
-
-  function newIt(ident, upt, upms) {
+  function newIt(ident, kick, upms) {
     var me = create(itProto);
+    me.kick = kick;
     me.ident = ident;
+    me.its = [];
+    me.asserts = [];
 
     function it(topic, any, ms) {
-      var t = now(), err;
+      var tick = now(), err;
       if (upms) {
-        var left = upms - (t - upt);
+        var left = upms - (tick - kick);
         if (left <= 0) return;  // 已超时，不再进行测试
         if (!ms) {
           ms = left;
@@ -323,10 +323,10 @@
       else if (ms) {
         err = ms;
       }
-      me.t = t;
+      me.tick = tick;
       me.ms = ms;
-      me.say('log', topic);
-      it = newIt(me.ident + '  ', t, ms);
+      print(me, '#;%s', topic);
+      push(me.its, it = newIt(me.ident + '  ', tick, ms));
       if (isFunction(any)) {
         if (isGeneratorFunction(any)) {
           if (ms) {
@@ -366,10 +366,6 @@
 
   /** 测试履约 */
   function fulfilled(value) {
-    var me = this, ms = now() - me.zero;
-    if (ms >= slow) {
-      me.say('mark', ms + 'ms');
-    }
     return value;
   }
 
@@ -377,7 +373,7 @@
   var rejected = function (err) {
     var me = this;
     if (isInteger(err)) {   // 超时拒绝
-      me.say('out', 'timeout ' + err + 'ms!');
+      print(me, '#rr;Timeout %dms!', err);
     }
     else if (isError(err)) {  // 代码故障
       sorry(me, err);
@@ -385,30 +381,57 @@
     else if (err === undefined) { // 静默异常
     }
     else {
-      me.say('error', String(err));
+      print(me, '#rr;%s', String(err));
     }
   };
 
   /** it 原型: ----------------------------------------------------------------------------------------
    *
    */
-
   var itProto = {
-    say: say, delay: delay, should: actual
+    get begin() {
+      this.trace = getTrace(Error(), 1);
+    },
+    get end() {
+      var me = this, trace = me.trace, end = getTrace(Error(), 1);
+      if (trace && end.path === trace.path) {
+        var codes = getCodes(trace.path);
+        if (codes.length) {
+          codes = piece(codes, trace.row + 1, end.row).join('\n');
+          if (codes) {
+            codes = replace(codes, RegExp('^' + me.ident, 'gm'), '');
+            print(me, '#ccc;%s', codes);
+          }
+
+        }
+      }
+      me.trace = null;
+    },
+    get as() {
+      var me = this;
+      var code = getTrace(Error(), 1);
+      if (code) {
+        code = replace(code.code, RegExp('^' + me.ident + '|\\s*\\bit\\.as\\b.*$', 'g'), '');
+        print(me, '#ccc;%s', code);
+      }
+    },
+    delay: delay,
+    should: actual,
+    sum: sum
   };
 
   function delay(ms) {
     var me = this;
     if (me.ms) {
-      var t = now();
-      var left = me.ms - (t - me.t);
+      var tick = now();
+      var left = me.ms - (tick - me.tick);
       if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
       if (ms > left) ms = left;
     }
     return new Promise(partial(setTimeout, [, ms])).then(function (value) {
       if (me.ms) {
-        var t = now();
-        var left = me.ms - (t - me.t);
+        var tick = now();
+        var left = me.ms - (tick - me.tick);
         if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
       }
       return value;
@@ -416,19 +439,77 @@
   }
 
   function actual(value) {
-    var me = create(assertProto);
+    var me = this;
+    var assert = create(assertProto);
+    push(me.asserts, assert);
     var trace = getTrace(Error(), 1);
     if (trace) {
-      me.topic = trim(trace.code);
-      me.loc = trace.loc;
+      assert.topic = trim(trace.code);
+      assert.loc = trace.loc;
     }
     else {
-      me.topic = 'unknown assert';
+      assert.topic = 'unknown assert';
     }
-    me.ident = this.ident;
-    me.actual = value;
-    me.args = piece(arguments, 1);
-    return me;
+    assert.ident = me.ident;
+    assert.actual = value;
+    assert.args = piece(arguments, 1);
+    assert.ms = 0;
+    assert.tick = now();
+    return assert;
+  }
+
+  function sum() {
+    var sum = sumit(this);
+    var total = sum.total, done = sum.done, okey = sum.okey, fail = sum.fail, miss = sum.miss, ms = sum.ms;
+    var doneRate = Math.floor(done/total*100);
+    var okeyRate = Math.floor(okey/done*100);
+    var failRate = Math.ceil(fail/done*100);
+    var missRate = Math.ceil(miss/total*100);
+
+    print(this, '#b;✈#; Total asserts: #b;%d#;, done: #%s;%d(%d%)#;, okey: #%s;%d(%d%)#;, fail: #%s;%d(%d%)#;, missing: #%s;%d(%d%)#; (in #b;%dms#;).',
+      total, miss?'rr':'gg', done, doneRate, fail?'rr':'gg', okey, okeyRate, fail?'rr':'gg', fail, failRate, miss?'rr':'gg', miss, missRate, ms
+    );
+  }
+
+  function sumit(me){
+    var total, done = 0, okey = 0, fail = 0, miss = 0, ms = 0, i;
+    var asserts = me.asserts, assert;
+    for (i = 0; assert = asserts[i]; i++) {
+      switch (assert.state) {
+        case 1 :
+          done++;
+          okey++;
+          break;
+        case -1:
+          done++;
+          fail++;
+          break;
+        default:
+          miss++;
+      }
+      ms += assert.ms;
+    }
+    total = i;
+
+    var its = me.its, it;
+    for(i = 0; it = its[i]; i++) {
+      var sum = sumit(it);
+      total += sum.total;
+      done += sum.done;
+      okey += sum.okey;
+      fail += sum.fail;
+      miss += sum.miss;
+      ms += sum.ms;
+    }
+
+    return {
+      total: total,
+      done: done,
+      okey: okey,
+      fail: fail,
+      miss: miss,
+      ms: ms
+    }
   }
 
   /** 断言原型: ----------------------------------------------------------------------------------------
@@ -436,8 +517,6 @@
    */
 
   var assertProto = {
-    say: say,
-
     /** assert chain: */
     get be() { return this },
     get should() { return this },
@@ -520,7 +599,9 @@
 
     /** exception: */
     throw: function (err) {
-      var me = this, actual = me.actual;
+      var me = this;
+      me.ms = now() - me.tick;
+      var actual = me.actual;
       if (isFunction(actual)) {
         try {
           me.actual.apply(undefined, me.args);
@@ -548,15 +629,22 @@
   function NOT(me) { return me._not ? ' not' : '' }
 
   function be(me, assert, something) {
+    me.ms = now() - me.tick;
     if (!(me.assert = !!assert ^ me._not)) me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
     report(me);
     return nop;
   }
 
-  function equal(value) { compare(this, this.actual == value, 'equal to', value) }
+  function equal(value) {
+    var me = this;
+    me.ms = now() - me.tick;
+    compare(me, me.actual == value, 'equal to', value);
+  }
 
   function equiv(value) {
-    compare(this, equiv(this.actual, value), 'equivalent to', value);
+    var me = this;
+    me.ms = now() - me.tick;
+    compare(me, equiv(me.actual, value), 'equivalent to', value);
 
     function equiv(a, b) {
       if (isObject(a) && isObject(b)) {
@@ -580,7 +668,11 @@
     }
   }
 
-  function same(value) { compare(this, this.actual === value, 'same to', value) }
+  function same(value) {
+    var me = this;
+    me.ms = now() - me.tick;
+    compare(me, me.actual === value, 'same to', value);
+  }
 
   function compare(me, assert, op, value) {
     if (!(me.assert = !!assert ^ me._not)) me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' ' + op + ' ' + toJson(value) + '.';
@@ -592,17 +684,18 @@
    */
   function report(me) {
     if (me.assert) {
-      me.say('okey', me.topic);
+      print(me, '#g;✔ %s', me.topic);
+      me.state = 1;
     }
     else {
-      me.say('fail', me.topic);
+      print(me, '#r;✘ %s', me.topic);
       if (me.note) {
-        // call(note, me, ident(me.note, '  '));
-        me.say('note', ident(me.note, '  '));
+        print(me, '#rr;%s', ident(me.note, '  '));
       }
       if (me.loc) {
-        me.say('note', ident(me.loc, '  '));
+        print(me, '#rr;%s', ident(me.loc, '  '));
       }
+      me.state = -1;
     }
   }
 
@@ -613,16 +706,11 @@
     if (trace) {
       err += ident('\n' + trace.code + '\n' + dup(' ', trace.col) + '^' + '\nat ' + trace.loc, '  ');
     }
-    me.say('error', err);
+    print(me, '#r;⦸ %s', err);
+    me.state = -1;
   }
 
   var ident = partial(replace, [, /^/gm]);
-
-  function say(type) {
-    var args = stylize(type, piece(arguments, 1));
-    args[0] = ident(args[0], this.ident);
-    apply(console.log, console, args);
-  }
 
   var isIdx = bind(_test, /^\d+$/);
   var isIdentifier = bind(_test, /^[A-Za-z_$][\w$]*$/);
@@ -667,12 +755,38 @@
     return json;
   }
 
+  var reVars = /%[sd]/g;
+  var reColor = /#(\w\w?\w?|);/g;
+  function print(me, s) {
+    var args = piece(arguments, 1);
+    if(isString(s)) {
+      var length = args.length, i = 1;
+      s = replace(s, reVars, function(s) {
+        return i < length ? args[i++] : s;
+      });
+
+      args.length = 1;
+      s = replace(s, reColor, function (s, color) {
+        if(global.window) {
+          s = '%c';
+          push(args, colors[color] || '');
+        }
+        else {
+          s = colors[color] || colors[''];
+        }
+        return s;
+      });
+    }
+    args[0] = ident(s, me.ident);
+    apply(console.log, console, args);
+  }
+
   /** 运行环境: ----------------------------------------------------------------------------------------
    *
    */
   var it = newIt('');
   var get;
-  var stylize, styles;
+  var colors;
 
   if (global.window) {
     var script = document.scripts[document.scripts.length - 1];
@@ -699,29 +813,38 @@
       else {
         var code = getCode(url) + '\n//# sourceURL=' + url;
         var module = {exports: {}};
-        // (function (module, exports) {
-        //   eval(arguments[2]);
-        // })(module, module.exports, code);
         exports = cacheExports[url] = modulize(module, module.exports, code);
       }
       return exports;
     };
 
-    styles = {
-      log: {icon: '%c', color: 'sliver'},
-      okey: {icon: '%c✔ ', color: 'lime'},
-      fail: {icon: '%c✘ ', color: 'tomato'},
-      note: {icon: '%c', color: 'brown'},
-      mark: {icon: '%c✈ ', color: 'royalblue'}, // ▶ ⚡ ♫ ♪ ✈
-      out: {icon: '%c⤦ ', color: 'magenta'}, //purple magenta crimson plum
-      error: {icon: '%c⦸ ', color: 'brown'}
-    };
-
-    stylize = function (key, args) {
-      args[0] = styles[key].icon + args[0];
-      splice(args, 1, 0, 'color:' + styles[key].color);
-      return args;
-    };
+    colors = {
+      "": "",
+      ddd: "color:black",
+      dd: "color:dimgray",
+      d: "color:darkgrey;font-weight:900",
+      rrr: "color:darkred",
+      rr: "color:red",
+      r: "color:tomato;font-weight:900",
+      yyy: "color:darkolivegreen",
+      yy: "color:olive",
+      y: "color:yellow;font-weight:900",
+      ggg: "color:darkgreen",
+      gg: "color:forestgreen",
+      g: "color:lawngreen;font-weight:900",
+      ccc: "color:teal",
+      cc: "color:cyan",
+      c: "color:cyan;font-weight:900",
+      bbb: "color:darkblue",
+      bb: "color:blue",
+      b: "color:royalblue;font-weight:900",
+      ppp: "color:purple",
+      pp: "color:darkorchid",
+      p: "color:magenta;font-weight:900",
+      www: "color:dimgray",
+      ww: "color:lightgrey",
+      w: "color:ghostwhite;font-weight:900",
+    }
   }
   else {
     var reEval = /eval at it.run [^<]*<anonymous>/g;
@@ -730,7 +853,7 @@
     it.run = function (file) {
       var _Error = Error;
       Error = function () {
-        var error = _Error.apply({}, arguments);
+        var error = apply(_Error, undefined, arguments);
         var stack = error.stack.replace(reEval, file);
         stack = stack.split('\n');
         splice(stack, 1, 1);
@@ -744,10 +867,10 @@
         call(_rejected, this, err);
       };
 
-      var module = {exports: {}};
       try {
         return eval.call(undefined, getCode(file));
-      } finally {
+      }
+      finally {
         rejected = _rejected;
         Error = _Error;
       }
@@ -759,20 +882,34 @@
       return fs.readFileSync(path, {encoding: 'utf-8'});
     };
 
-    styles = {
-      log: '\x1b[1m',
-      okey: '\x1b[32m\x1b[1m✔ ',
-      fail: '\x1b[31m\x1b[1m✘ ',
-      note: '\x1b[31m',
-      mark: '\x1b[34m\x1b[1m✈ ',
-      out: '\x1b[35m⤦ ',
-      error: '\x1b[31m⦸ '
-    };
+    colors = {
+      '': '\x1b[0m',
+      ddd: "\u001b[2m\u001b[30m",
+      dd: "\u001b[0m\u001b[30m",
+      d: "\u001b[1m\u001b[30m",
+      rrr: "\u001b[2m\u001b[31m",
+      rr: "\u001b[0m\u001b[31m",
+      r: "\u001b[1m\u001b[31m",
+      yyy: "\u001b[2m\u001b[33m",
+      yy: "\u001b[0m\u001b[33m",
+      y: "\u001b[1m\u001b[33m",
+      ggg: "\u001b[2m\u001b[32m",
+      gg: "\u001b[0m\u001b[32m",
+      g: "\u001b[1m\u001b[32m",
+      ccc: "\u001b[2m\u001b[36m",
+      cc: "\u001b[0m\u001b[36m",
+      c: "\u001b[1m\u001b[36m",
+      bbb: "\u001b[2m\u001b[34m",
+      bb: "\u001b[0m\u001b[34m",
+      b: "\u001b[1m\u001b[34m",
+      ppp: "\u001b[2m\u001b[35m",
+      pp: "\u001b[0m\u001b[35m",
+      p: "\u001b[1m\u001b[35m",
+      www: "\u001b[2m\u001b[37m",
+      ww: "\u001b[0m\u001b[37m",
+      w: "\u001b[1m\u001b[37m"
+    }
 
-    stylize = function (key, args) {
-      args[0] = styles[key] + args[0] + '\x1b[0m';
-      return args;
-    };
   }
 
   var cacheCode = {};

@@ -13,6 +13,8 @@ it('String asserts:', function* (it){
       it.should().not.be.string();
       it.should(123).not.be.string();
       it.should(new String('abc')).not.be.string();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -28,9 +30,9 @@ it('String asserts:', function* (it){
       it.should().be.string();
       it.should(123).be.string();
       it.should(new String('abc')).be.string();
-    });
 
-    it('ends.');
+      it.sum();
+    });
   });
 
   it('.String / .String() asserts:', function(it){
@@ -55,6 +57,8 @@ it('String asserts:', function* (it){
       it.should('abc').not.be.String();
       it.should('123').not.be.String();
       it.should({}).not.be.String();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -78,10 +82,10 @@ it('String asserts:', function* (it){
       it.should('abc').be.String();
       it.should('123').be.String();
       it.should({}).be.String();
-    });
 
-    it('ends.');
+      it.sum();
+    });
   });
 
-  it('end.');
+  it.sum();
 });

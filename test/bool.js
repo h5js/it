@@ -22,6 +22,8 @@ it('Boolean asserts:', function* (it){
       it.should('').not.be.true();
       it.should('abc').not.be.true();
       it.should({}).not.be.true();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -46,9 +48,10 @@ it('Boolean asserts:', function* (it){
       it.should('').be.true();
       it.should('abc').be.true();
       it.should({}).be.true();
+
+      it.sum();
     });
 
-    it('end.');
   });
 
   it('.false / .false() asserts:', function(it){
@@ -74,6 +77,8 @@ it('Boolean asserts:', function* (it){
       it.should('').not.be.false();
       it.should('abc').not.be.false();
       it.should({}).not.be.false();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -98,9 +103,10 @@ it('Boolean asserts:', function* (it){
       it.should('').be.false();
       it.should('abc').be.false();
       it.should({}).be.false();
+
+      it.sum();
     });
 
-    it('end.');
   });
 
   it('.ok / .ok() asserts:', function(it){
@@ -131,6 +137,7 @@ it('Boolean asserts:', function* (it){
       it.should(NaN).not.be.ok();
       it.should('').not.be.ok();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -160,10 +167,10 @@ it('Boolean asserts:', function* (it){
       it.should(NaN).be.ok();
       it.should('').be.ok();
 
+      it.sum();
     });
 
-    it('end.');
   });
 
-  it('end.');
+  it.sum();
 });

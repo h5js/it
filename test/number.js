@@ -21,6 +21,8 @@ it('Number asserts:', function(it){
       it.should(true).not.be.number();
       it.should('abc').not.be.number();
       it.should(new Number(123)).not.be.number();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -44,9 +46,9 @@ it('Number asserts:', function(it){
       it.should(true).be.number();
       it.should('abc').be.number();
       it.should(new Number(123)).be.number();
-    });
 
-    it('end.');
+      it.sum();
+    });
   });
 
   it('.Number / .Number() asserts:', function(it){
@@ -77,6 +79,8 @@ it('Number asserts:', function(it){
       it.should(Infinity).not.be.Number();
       it.should({}).not.be.Number();
       it.should([]).not.be.Number();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -106,9 +110,9 @@ it('Number asserts:', function(it){
       it.should(Infinity).be.Number();
       it.should({}).be.Number();
       it.should([]).be.Number();
-    });
 
-    it('end.');
+      it.sum();
+    });
   });
 
   it('.integer / .integer() asserts:', function(it){
@@ -131,6 +135,8 @@ it('Number asserts:', function(it){
       it.should(NaN).not.be.integer();
       it.should(Infinity).not.be.integer();
       it.should(new Number(123)).not.be.integer();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -152,9 +158,9 @@ it('Number asserts:', function(it){
       it.should(NaN).be.integer();
       it.should(Infinity).be.integer();
       it.should(new Number(123)).be.integer();
-    });
 
-    it('end.');
+      it.sum();
+    });
   });
 
   it('.safeInteger / .safeInteger() asserts:', function(it){
@@ -186,6 +192,8 @@ it('Number asserts:', function(it){
       it.should(Number.MIN_VALUE).not.be.safeInteger();
       it.should(Number.MIN_SAFE_INTEGER-1).not.be.safeInteger();
       it.should(new Number(0)).not.be.safeInteger();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -216,9 +224,9 @@ it('Number asserts:', function(it){
       it.should(Number.MIN_VALUE).be.safeInteger();
       it.should(Number.MIN_SAFE_INTEGER-1).be.safeInteger();
       it.should(new Number(0)).be.safeInteger();
+
+      it.sum();
     });
-    
-    it('end.');
   });
 
   it('.NaN / .NaN() asserts:', function(it){
@@ -255,6 +263,7 @@ it('Number asserts:', function(it){
       it.should(''-0).not.be.NaN();
       it.should(''*123).not.be.NaN();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -290,9 +299,8 @@ it('Number asserts:', function(it){
       it.should(''-0).be.NaN();
       it.should(''*123).be.NaN();
 
+      it.sum();
     });
-
-    it('end.');
   });
 
   it('.finite / .finite() asserts:', function(it){
@@ -327,6 +335,7 @@ it('Number asserts:', function(it){
       it.should(Number.NEGATIVE_INFINITY).not.be.finite();
       it.should(new Number('1.2')).not.be.finite();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -360,10 +369,9 @@ it('Number asserts:', function(it){
       it.should(Number.NEGATIVE_INFINITY).be.finite();
       it.should(new Number('1.2')).be.finite();
 
+      it.sum();
     });
-
-    it('end.');
   });
 
-  it('end.');
+  it.sum();
 });

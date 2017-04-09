@@ -1,7 +1,7 @@
 it('Function asserts:', function(it){
-  function normalFunc(){};
-  function* genFunc(){};
-  async function asyncFunc(){};
+  function normalFunc(){} it.as
+  function* genFunc(){} it.as
+  async function asyncFunc(){} it.as
 
   it('.function / .function() asserts:', function(it){
     it('Okey', function(it){
@@ -31,6 +31,7 @@ it('Function asserts:', function(it){
       it.should(Symbol()).not.be.function();
       it.should({}).not.be.function();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -60,10 +61,8 @@ it('Function asserts:', function(it){
       it.should(Symbol()).be.function();
       it.should({}).be.function();
 
+      it.sum();
     });
-
-    it('end.');
-
   });
 
   it('.SyncFunction / .SyncFunction() asserts:', function(it){
@@ -94,6 +93,7 @@ it('Function asserts:', function(it){
       it.should(Symbol()).not.be.SyncFunction();
       it.should({}).not.be.SyncFunction();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -123,10 +123,8 @@ it('Function asserts:', function(it){
       it.should(Symbol()).be.SyncFunction();
       it.should({}).be.SyncFunction();
 
+      it.sum();
     });
-
-    it('end.');
-
   });
 
   it('.NormalFunction / .NormalFunction() asserts:', function(it){
@@ -157,6 +155,7 @@ it('Function asserts:', function(it){
       it.should(Symbol()).not.be.NormalFunction();
       it.should({}).not.be.NormalFunction();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -186,10 +185,8 @@ it('Function asserts:', function(it){
       it.should(Symbol()).be.NormalFunction();
       it.should({}).be.NormalFunction();
 
+      it.sum();
     });
-
-    it('end.');
-
   });
 
   it('.ArrowFunction / .ArrowFunction() asserts:', function(it){
@@ -220,6 +217,7 @@ it('Function asserts:', function(it){
       it.should(Symbol()).not.be.ArrowFunction();
       it.should({}).not.be.ArrowFunction();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -249,10 +247,8 @@ it('Function asserts:', function(it){
       it.should(Symbol()).be.ArrowFunction();
       it.should({}).be.ArrowFunction();
 
+      it.sum();
     });
-
-    it('end.');
-
   });
 
   it('.GeneratorFunction / .GeneratorFunction() asserts:', function(it){
@@ -281,6 +277,7 @@ it('Function asserts:', function(it){
       it.should('abc').not.be.GeneratorFunction();
       it.should({}).not.be.GeneratorFunction();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -308,9 +305,8 @@ it('Function asserts:', function(it){
       it.should('abc').be.GeneratorFunction();
       it.should({}).be.GeneratorFunction();
 
+      it.sum();
     });
-
-    it('end.');
   });
 
   it('.AsyncFunction / .AsyncFunction() asserts:', function(it){
@@ -341,6 +337,7 @@ it('Function asserts:', function(it){
       it.should(Symbol()).not.be.AsyncFunction();
       it.should({}).not.be.AsyncFunction();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -370,11 +367,9 @@ it('Function asserts:', function(it){
       it.should(Symbol()).be.AsyncFunction();
       it.should({}).be.AsyncFunction();
 
+      it.sum();
     });
-
-    it('end.');
-
   });
 
-  it('end.');
+  it.sum();
 });

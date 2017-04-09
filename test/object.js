@@ -27,6 +27,7 @@ it('Object asserts:', function(it){
       it.should('abc').not.be.object();
       it.should(Symbol()).not.be.object();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -56,9 +57,8 @@ it('Object asserts:', function(it){
       it.should('abc').be.object();
       it.should(Symbol()).be.object();
 
+      it.sum();
     });
-
-    it('end.');
   });
 
   it('.objective / .objective() asserts:', function(it){
@@ -89,6 +89,7 @@ it('Object asserts:', function(it){
       it.should('abc').not.be.objective();
       it.should(Symbol()).not.be.objective();
 
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -118,10 +119,9 @@ it('Object asserts:', function(it){
       it.should('abc').be.objective();
       it.should(Symbol()).be.objective();
 
+      it.sum();
     });
-
-    it('end.');
   });
 
-  it('end.');
+  it.sum();
 });

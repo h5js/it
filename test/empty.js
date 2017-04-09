@@ -14,6 +14,8 @@ it('Empty asserts:', function* (it){
       it.should(null).not.be.undefined();
       it.should(123).not.be.undefined();
       it.should(y).not.be.undefined();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -30,9 +32,10 @@ it('Empty asserts:', function* (it){
       it.should(null).be.undefined();
       it.should(123).be.undefined();
       it.should(y).be.undefined();
+
+      it.sum();
     });
 
-    it('ends.');
   });
 
   it('.null / .null() asserts:', function(it){
@@ -50,6 +53,8 @@ it('Empty asserts:', function* (it){
       it.should(x).not.be.null();
       it.should(123).not.be.null();
       it.should(y).not.be.null();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -66,10 +71,11 @@ it('Empty asserts:', function* (it){
       it.should(x).be.null();
       it.should(123).be.null();
       it.should(y).be.null();
+
+      it.sum();
     });
 
-    it('ends.');
   });
 
-  it('end.');
+  it.sum();
 });

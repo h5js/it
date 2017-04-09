@@ -15,6 +15,8 @@ it('Symbol asserts:', function(it){
       it.should('').not.be.symbol();
       it.should('abc').not.be.symbol();
       it.should({}).not.be.symbol();
+
+      it.sum();
     });
 
     it('Fail:', function(it){
@@ -32,10 +34,10 @@ it('Symbol asserts:', function(it){
       it.should('').be.symbol();
       it.should('abc').be.symbol();
       it.should({}).be.symbol();
-    });
 
-    it('end.');
+      it.sum();
+    });
   });
 
-  it('end.');
+  it.sum();
 });
