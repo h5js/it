@@ -948,13 +948,14 @@
 
     it.go = function(files) {
       var trace = getTrace(Error(), 1);
-      go(run(trace.path, files));
+      return go(run(trace.path, files));
     }
 
     module.exports = it;
   }
 
   function* run(cwd, files) {
+    var _source = source;
     try {
       for(var i=0, file; file = files[i]; i++) {
         file = purl(file, cwd);
@@ -969,7 +970,7 @@
       }
     }
     finally {
-      source = '';
+      source = _source;
     }
   }
 
