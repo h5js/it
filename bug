@@ -1,0 +1,8 @@
+global.it = require('./src/it.js');
+var files = process.argv.slice(2);
+if( files.length ) {
+  it.go(files);
+}
+else {
+  console.log('Usage: it your-test.js');
+}
