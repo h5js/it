@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 global.it = require('./src/it.js');
-var cwd = process.cwd() + '/';
 var files = process.argv.slice(2);
 if( files.length ) {
-  for(var i=0, file; file=files[i]; i++) {
-    file = it.purl(file, cwd);
-    it.run(file);
-  }
+  it.go(files);
 }
 else {
   console.log('Usage: it your-test.js');

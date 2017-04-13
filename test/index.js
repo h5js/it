@@ -1,3 +1,13 @@
-global.it = require('../src/it.js');
-require('./error.js');
-require('./bool.js');
+it.go([
+  'itself.js',
+  'error.js',
+  'empty.js',
+  'bool.js',
+  'number.js',
+  'string.js',
+  'symbol.js',
+  'object.js',
+  'function.js',
+  'compare.js',
+  'throw.js'
+]);

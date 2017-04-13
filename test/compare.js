@@ -1,4 +1,4 @@
-it('Comparison asserts:', function(){
+it('Comparison asserts:', function(it){
   it('.equal() asserts:', function(it){
     it('Okey:', function(it){
       it.should(0).equal(0);

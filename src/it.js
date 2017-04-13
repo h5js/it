@@ -7,6 +7,7 @@
   /** 基础支持: ----------------------------------------------------------------------------------------
    *
    */
+  var undefined;
 
   /** --------------------------------------------------------------------------
    * Function
@@ -305,95 +306,116 @@
   /** 测试机制: ----------------------------------------------------------------------------------------
    *
    */
-  function newIt(ident, kick, ms, timeout) {
-    var me = create(itProto);
-    me.kick = kick;
-    me.timeout = timeout;
-    me.ident = ident;
-    me.its = [];
-    me.asserts = [];
+  function newIt(ident, tick, life, ms) {
+    it.tick = tick;
+    it.life = life;
+    it.ms = ms;
+    it.ident = ident;
+    it.its = [];
+    it.asserts = [];
+
+
+    return setPrototype(it, itProto);
 
     function it() {
-      var tick = now(), limit, timeout;
-      me.tick = tick;
+      var tick = now(), life = it.life - (tick - it.tick);
+      if(life <= 0)
+        throw it.ms;  // 若上层 it 已超时，抛出超时异常给上层。
+
       var args = arguments;
-      timeout = limit = isInteger(args[0]) && args[0] || isInteger(args[1]) && args[1] || undefined;
-
-      if (ms) {
-        ms = ms - (tick - kick);
-        if (ms <= 0) {
-          throw me.timeout;
-          // print(me, '#rr;Timeout %dms!#;', me.ms);
-          // return;   // 已超时，不再进行测试
-        }
-        if (limit > ms)
-          limit = ms;
-        if(ms > limit)
-          ms = limit;
-        me.ms = ms;
-      }
-      else {
-        ms = limit;
-      }
-
       if(!args.length) return Promise.resolve();
 
-      var topic = isString(args[0]) && args[0] || isString(args[1]) && args[1] || undefined;
+      var ms = isInteger(args[0]) ? args[0] : isInteger(args[1]) ? args[1] : undefined;
+
+      var topic = isString(args[0]) ? args[0] : undefined;
       if(topic !== undefined)
-        print(me, '#;%s', topic);
+        print(it, '#;%s', topic);
 
-      var any = !isString(args[0]) && !isInteger(args[0]) && args[0] || !isString(args[1]) && !isInteger(args[1]) && args[1] || args[2];
+      var any = isString(args[0]) ? isInteger(args[1]) ? args[2] : args[1] : isInteger(args[0]) ? args[1] : args[0];
 
 
-      push(me.its, it = newIt(me.ident + '  ', tick, ms, timeout));
+      if(isFunction(any)) {
+        if(life > ms) {
+          life = ms;
+        }
+        var sub = newIt(ident + '  ', tick, life || ms, ms);
+        push(it.its, sub);
 
-      if(isGeneratorFunction(any) || isAsyncFunction(any))
-        any = any(it);
+        if(isGeneratorFunction(any) || isAsyncFunction(any)) {
+          any = any(sub);
+        }
+        else if(any.length>1) {
+          any = new Promise(function(resolve, reject){
+            var timer = life || ms;
+            if(timer !== undefined) {
+              timer = setTimeout(function(){
+                timer = null;
+                reject(sub.ms);
+              }, timer);
+            }
+            any(sub, done, to);
+
+            function done(value) {
+              timer = clearTimeout(timer);
+              resolve(value);
+            }
+
+            function to(any){
+              return function(){
+                if(timer !== null)
+                  return apply(any, this, arguments);
+              }
+            }
+          }).then(fulfilled, rejected);
+        }
+        else {
+          try {
+            any = any(sub);
+            any = fulfilled(any);
+          }
+          catch (err) {
+            rejected(any = err);
+          }
+          return any;
+        }
+      }
+
       if(isGenerator(any)) {
-        any = go(any, ms).then(bind(fulfilled, me), bind(rejected, me));
+        any = go(any, ms).then(fulfilled, rejected);
       }
       else if(isPromise(any)) {
-        any = any.then(bind(fulfilled, me), bind(rejected, me));
+        any = any.then(fulfilled, rejected);
       }
       else if(isFunction(any)){
-        try {
-          any = any(it);
-          call(fulfilled, me);
-        }
-        catch (err) {
-          call(rejected, me, err);
-        }
       }
-      else if( limit !== undefined ) {
-        any = me.delay(limit, any).then(bind(fulfilled, me), bind(rejected, me));
+      else if( ms !== undefined ) {
+        any = it.delay(ms, any).then(fulfilled, rejected);
       }
 
       return any;
     }
 
-    return setPrototype(bind(it, me), me);
-  }
+    /** 测试履约 */
+    function fulfilled(value) {
+      return value;
+    }
 
-  /** 测试履约 */
-  function fulfilled(value) {
-    return value;
-  }
+    /** 测试被拒 */
+    function rejected (err) {
+      if (isInteger(err)) {   // 超时拒绝
+        print(it, '#rr;Timeout %dms!#;', err);
+      }
+      else if (isError(err)) {  // 代码故障
+        sorry(it, err);
+      }
+      else if (err === undefined) { // 静默异常
+      }
+      else {
+        print(it, '#rr;%s#;', String(err));
+      }
+    }
 
-  /** 测试被拒 */
-  var rejected = function (err) {
-    var me = this;
-    if (isInteger(err)) {   // 超时拒绝
-      print(me, '#rr;Timeout %dms!#;', err);
-    }
-    else if (isError(err)) {  // 代码故障
-      sorry(me, err);
-    }
-    else if (err === undefined) { // 静默异常
-    }
-    else {
-      print(me, '#rr;%s#;', String(err));
-    }
-  };
+  }
 
   /** it 原型: ----------------------------------------------------------------------------------------
    *
@@ -403,26 +425,25 @@
       this.trace = getTrace(Error(), 1);
     },
     get end() {
-      var me = this, trace = me.trace, end = getTrace(Error(), 1);
+      var it = this, trace = it.trace, end = getTrace(Error(), 1);
       if (trace && end.path === trace.path) {
         var codes = getCodes(trace.path);
         if (codes.length) {
           codes = piece(codes, trace.row + 1, end.row).join('\n');
           if (codes) {
-            codes = replace(codes, RegExp('^' + me.ident, 'gm'), '');
-            print(me, '#ccc;%s#;', codes);
+            codes = replace(codes, RegExp('^' + it.ident, 'gm'), '');
+            print(it, '#ccc;%s#;', codes);
           }
-
         }
       }
-      me.trace = null;
+      it.trace = null;
     },
     get as() {
-      var me = this;
+      var it = this;
       var code = getTrace(Error(), 1);
       if (code) {
-        code = replace(code.code, RegExp('^' + me.ident + '|\\s*\\bit\\.as\\b.*$', 'g'), '');
-        print(me, '#ccc;%s#;', code);
+        code = replace(code.code, RegExp('^' + it.ident + '|\\s*\\bit\\.as\\b.*$', 'g'), '');
+        print(it, '#ccc;%s#;', code);
       }
     },
     delay: delay,
@@ -431,21 +452,14 @@
   };
 
   function delay(ms, value) {
-    var me = this;
-    if (me.ms) {
+    var it = this;
+    if (it.life) {
       var tick = now();
-      var left = me.ms - (tick - me.tick);
-      if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
-      if (ms > left) ms = left;
+      var life = it.life - (tick - it.tick);
+      if (life <= 0) throw it.ms;  //抛出超时静默异常，终止后续运行！
+      if (ms > life) ms = life;
     }
-    return new Promise(partial(setTimeout, [, ms])).then(function () {
-      if (me.ms) {
-        var tick = now();
-        var left = me.ms - (tick - me.tick);
-        if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
-      }
-      return value;
-    });
+    return new Promise(partial(setTimeout, [, ms, value]));
   }
 
   function actual(value) {
@@ -481,9 +495,9 @@
     );
   }
 
-  function sumit(me){
+  function sumit(it){
     var total, done = 0, okey = 0, fail = 0, miss = 0, ms = 0, i;
-    var asserts = me.asserts, assert;
+    var asserts = it.asserts, assert;
     for (i = 0; assert = asserts[i]; i++) {
       switch (assert.state) {
         case 1 :
@@ -501,15 +515,15 @@
     }
     total = i;
 
-    var its = me.its, it;
-    for(i = 0; it = its[i]; i++) {
-      var sum = sumit(it);
-      total += sum.total;
-      done += sum.done;
-      okey += sum.okey;
-      fail += sum.fail;
-      miss += sum.miss;
-      ms += sum.ms;
+    var its = it.its;
+    for(i = 0; i<its.length; i++) {
+      var sub = sumit(its[i]);
+      total += sub.total;
+      done += sub.done;
+      okey += sub.okey;
+      fail += sub.fail;
+      miss += sub.miss;
+      ms += sub.ms;
     }
 
     return {
