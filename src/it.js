@@ -944,12 +944,12 @@
       www: "\u001b[2m\u001b[37m",
       ww: "\u001b[0m\u001b[37m",
       w: "\u001b[1m\u001b[37m"
-    }
+    };
 
     it.go = function(files) {
       var trace = getTrace(Error(), 1);
       return go(run(trace.path, files));
-    }
+    };
 
     module.exports = it;
   }
