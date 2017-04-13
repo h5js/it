@@ -306,8 +306,8 @@
   /** 测试机制: ----------------------------------------------------------------------------------------
    *
    */
-  function newIt(ident, tick, life, ms) {
-    it.tick = tick;
+  function newIt(ident, kick, life, ms) {
+    it.kick = kick;
     it.life = life;
     it.ms = ms;
     it.ident = ident;
@@ -318,7 +318,7 @@
     return setPrototype(it, itProto);
 
     function it() {
-      var tick = now(), life = it.life - (tick - it.tick);
+      var kick = now(), life = it.life - (kick - it.kick);
       if(life <= 0)
         throw it.ms;  // 若上层 it 已超时，抛出超时异常给上层。
 
@@ -328,8 +328,10 @@
       var ms = isInteger(args[0]) ? args[0] : isInteger(args[1]) ? args[1] : undefined;
 
       var topic = isString(args[0]) ? args[0] : undefined;
-      if(topic !== undefined)
-        print(it, '#;%s', topic);
+      if(topic !== undefined) {
+        var limit = ms !== undefined ? ' ('+ms+'ms)' : '';
+        print(it, '#;%s#b;%s#;', topic, limit);
+      }
 
       var any = isString(args[0]) ? isInteger(args[1]) ? args[2] : args[1] : isInteger(args[0]) ? args[1] : args[0];
 
@@ -338,7 +340,7 @@
         if(life > ms) {
           life = ms;
         }
-        var sub = newIt(ident + '  ', tick, life || ms, ms);
+        var sub = newIt(ident + '  ', kick, life || ms, ms);
         push(it.its, sub);
 
         if(isGeneratorFunction(any) || isAsyncFunction(any)) {
@@ -446,6 +448,9 @@
         print(it, '#ccc;%s#;', code);
       }
     },
+    get tick() {
+      return Promise.resolve();
+    },
     delay: delay,
     should: actual,
     sum: sum
@@ -454,8 +459,8 @@
   function delay(ms, value) {
     var it = this;
     if (it.life) {
-      var tick = now();
-      var life = it.life - (tick - it.tick);
+      var kick = now();
+      var life = it.life - (kick - it.kick);
       if (life <= 0) throw it.ms;  //抛出超时静默异常，终止后续运行！
       if (ms > life) ms = life;
     }
@@ -478,21 +483,25 @@
     assert.actual = value;
     assert.args = piece(arguments, 1);
     assert.ms = 0;
-    assert.tick = now();
+    assert.kick = now();
     return assert;
   }
 
   function sum() {
     var sum = sumit(this);
     var total = sum.total, done = sum.done, okey = sum.okey, fail = sum.fail, miss = sum.miss, ms = sum.ms;
-    var doneRate = Math.floor(done/total*100);
-    var okeyRate = Math.floor(okey/done*100);
-    var failRate = Math.ceil(fail/done*100);
-    var missRate = Math.ceil(miss/total*100);
+    var doneRate = rate(Math.floor(done/total*100));
+    var okeyRate = rate(Math.floor(okey/done*100));
+    var failRate = rate(Math.ceil(fail/done*100));
+    var missRate = rate(Math.ceil(miss/total*100));
 
-    print(this, '#b;✈#; Total asserts: #b;%d#;, done: #%s;%d(%d％)#;, okey: #%s;%d(%d％)#;, fail: #%s;%d(%d％)#;, missing: #%s;%d(%d％)#; (in #b;%dms#;).',
+    print(this, '#b;✈#; Total asserts: #b;%d#;, done: #%s;%d%s#;, okey: #%s;%d%s#;, fail: #%s;%d%s#;, missing: #%s;%d%s#; (in #b;%dms#;).',
       total, miss?'rr':'gg', done, doneRate, fail?'rr':'gg', okey, okeyRate, fail?'rr':'gg', fail, failRate, miss?'rr':'gg', miss, missRate, ms
     );
+
+    function rate(value) {
+      return isInteger(value) ? '(' + value + '%)' : '';
+    }
   }
 
   function sumit(it){
@@ -624,7 +633,7 @@
     /** exception: */
     throw: function (err) {
       var me = this;
-      me.ms = now() - me.tick;
+      me.ms = now() - me.kick;
       var actual = me.actual;
       if (isFunction(actual)) {
         try {
@@ -653,7 +662,7 @@
   function NOT(me) { return me._not ? ' not' : '' }
 
   function be(me, assert, something) {
-    me.ms = now() - me.tick;
+    me.ms = now() - me.kick;
     if (!(me.assert = !!assert ^ me._not)) me.note = 'expect ' + toJson(me.actual) + NOT(me) + ' be ' + something + '.';
     report(me);
     return nop;
@@ -661,13 +670,13 @@
 
   function equal(value) {
     var me = this;
-    me.ms = now() - me.tick;
+    me.ms = now() - me.kick;
     compare(me, me.actual == value, 'equal to', value);
   }
 
   function equiv(value) {
     var me = this;
-    me.ms = now() - me.tick;
+    me.ms = now() - me.kick;
     compare(me, equiv(me.actual, value), 'equivalent to', value);
 
     function equiv(a, b) {
@@ -694,7 +703,7 @@
 
   function same(value) {
     var me = this;
-    me.ms = now() - me.tick;
+    me.ms = now() - me.kick;
     compare(me, me.actual === value, 'same to', value);
   }
 
@@ -956,7 +965,7 @@
         else {
           source = file;
         }
-        yield eval.call(undefined, code);
+        yield call(eval, undefined, code);
       }
     }
     finally {
