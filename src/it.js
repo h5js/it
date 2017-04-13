@@ -153,14 +153,17 @@
   /** 扩展支持: ----------------------------------------------------------------------------------------
    *
    */
-
+  var source;
+  var reEval = /eval at run [^<]*<anonymous>/g;
   var reTraces = /(?:https?:\/\/[\w.-]+(?::\d+)?|)[\w./-]+(?:\?.*|):\d+:\d+/g;
   var reTrace = /((?:https?:\/\/[\w.-]+(?::\d+)?|)[\w./-]+(?:\?.*|)):(\d+):(\d+)/;
-  // var reTrace = /(((?:https?:\/\/\w+(?:(?:\.\w+)*(?::\d+))?)?(?:\/\w+(?:\.\w+)*)+)(?:\?[^#]*)?)(?:#.*)?:(\d+):(\d+)/;
   /** 获取错误追踪信息 */
   function getTrace(err, level) {
-    var ms, trace, codes;
-    if (ms = match(err.stack, reTraces)) {
+    var trace = err.stack, ms, codes;
+    if(source) {
+      trace = replace(trace, reEval, source);
+    }
+    if (ms = match(trace, reTraces)) {
       if (!isInteger(level)) level = 0;
       if ((ms = ms[level]) && (ms = match(ms, reTrace))) {
         var path = ms[1], row = ms[2] - 1, col = ms[3] - 1;
@@ -232,14 +235,14 @@
   /** 运行机制: ----------------------------------------------------------------------------------------
    *
    */
-  function go(gen, ms) {
+  function go(gen, limit) {
     return isGenerator(gen) ? new Promise(function (resolve, reject) {
       var state, timer;
-      if (ms > 0) {
+      if (limit > 0) {
         timer = setTimeout(function () {
           gen.done = 1;
-          reject(ms);
-        }, ms);
+          reject(limit);
+        }, limit);
       }
 
       next();
@@ -271,6 +274,7 @@
           }
         }
         else if (state.done) {
+          clearTimeout(timer);
           gen.done = 1;
           resolve(value);
         }
@@ -301,63 +305,69 @@
   /** 测试机制: ----------------------------------------------------------------------------------------
    *
    */
-  function newIt(ident, kick, upms) {
+  function newIt(ident, kick, ms, timeout) {
     var me = create(itProto);
     me.kick = kick;
+    me.timeout = timeout;
     me.ident = ident;
     me.its = [];
     me.asserts = [];
 
-    function it(topic, any, ms) {
-      var tick = now(), err;
-      if (upms) {
-        var left = upms - (tick - kick);
-        if (left <= 0) return;  // 已超时，不再进行测试
-        if (!ms) {
-          ms = left;
-        }
-        else if (ms > left) {
-          ms = left;
-        }
-      }
-      else if (ms) {
-        err = ms;
-      }
+    function it() {
+      var tick = now(), limit, timeout;
       me.tick = tick;
-      me.ms = ms;
-      print(me, '#;%s', topic);
-      push(me.its, it = newIt(me.ident + '  ', tick, ms));
-      if (isFunction(any)) {
-        if (isGeneratorFunction(any)) {
-          if (ms) {
-            any = (go(any(it), ms, err));
-          }
-          else {
-            any = go(any(it));
-          }
-          any.then(bind(fulfilled, me), bind(rejected, me));
+      var args = arguments;
+      timeout = limit = isInteger(args[0]) && args[0] || isInteger(args[1]) && args[1] || undefined;
+
+      if (ms) {
+        ms = ms - (tick - kick);
+        if (ms <= 0) {
+          throw me.timeout;
+          // print(me, '#rr;Timeout %dms!#;', me.ms);
+          // return;   // 已超时，不再进行测试
         }
-        else if (isAsyncFunction(any)) {
-          any = any(it).then(bind(fulfilled, me), bind(rejected, me));
+        if (limit > ms)
+          limit = ms;
+        if(ms > limit)
+          ms = limit;
+        me.ms = ms;
+      }
+      else {
+        ms = limit;
+      }
+
+      if(!args.length) return Promise.resolve();
+
+      var topic = isString(args[0]) && args[0] || isString(args[1]) && args[1] || undefined;
+      if(topic !== undefined)
+        print(me, '#;%s', topic);
+
+      var any = !isString(args[0]) && !isInteger(args[0]) && args[0] || !isString(args[1]) && !isInteger(args[1]) && args[1] || args[2];
+
+
+      push(me.its, it = newIt(me.ident + '  ', tick, ms, timeout));
+
+      if(isGeneratorFunction(any) || isAsyncFunction(any))
+        any = any(it);
+      if(isGenerator(any)) {
+        any = go(any, ms).then(bind(fulfilled, me), bind(rejected, me));
+      }
+      else if(isPromise(any)) {
+        any = any.then(bind(fulfilled, me), bind(rejected, me));
+      }
+      else if(isFunction(any)){
+        try {
+          any = any(it);
+          call(fulfilled, me);
         }
-        else {
-          try {
-            any = any(it);
-            call(fulfilled, me);
-          } catch (err) {
-            call(rejected, me, err);
-          }
+        catch (err) {
+          call(rejected, me, err);
         }
       }
-      else if (isGenerator(any)) {
-        if (ms) {
-          any = go(any, ms, err);
-        }
-        else {
-          any = go(any);
-        }
-        any.then(bind(fulfilled, it), bind(rejected, it));
+      else if( limit !== undefined ) {
+        any = me.delay(limit, any).then(bind(fulfilled, me), bind(rejected, me));
       }
+
       return any;
     }
 
@@ -373,7 +383,7 @@
   var rejected = function (err) {
     var me = this;
     if (isInteger(err)) {   // 超时拒绝
-      print(me, '#rr;Timeout %dms!', err);
+      print(me, '#rr;Timeout %dms!#;', err);
     }
     else if (isError(err)) {  // 代码故障
       sorry(me, err);
@@ -381,7 +391,7 @@
     else if (err === undefined) { // 静默异常
     }
     else {
-      print(me, '#rr;%s', String(err));
+      print(me, '#rr;%s#;', String(err));
     }
   };
 
@@ -400,7 +410,7 @@
           codes = piece(codes, trace.row + 1, end.row).join('\n');
           if (codes) {
             codes = replace(codes, RegExp('^' + me.ident, 'gm'), '');
-            print(me, '#ccc;%s', codes);
+            print(me, '#ccc;%s#;', codes);
           }
 
         }
@@ -412,7 +422,7 @@
       var code = getTrace(Error(), 1);
       if (code) {
         code = replace(code.code, RegExp('^' + me.ident + '|\\s*\\bit\\.as\\b.*$', 'g'), '');
-        print(me, '#ccc;%s', code);
+        print(me, '#ccc;%s#;', code);
       }
     },
     delay: delay,
@@ -420,7 +430,7 @@
     sum: sum
   };
 
-  function delay(ms) {
+  function delay(ms, value) {
     var me = this;
     if (me.ms) {
       var tick = now();
@@ -428,7 +438,7 @@
       if (left <= 0) throw undefined;  //抛出静默异常，终止后续运行！
       if (ms > left) ms = left;
     }
-    return new Promise(partial(setTimeout, [, ms])).then(function (value) {
+    return new Promise(partial(setTimeout, [, ms])).then(function () {
       if (me.ms) {
         var tick = now();
         var left = me.ms - (tick - me.tick);
@@ -466,7 +476,7 @@
     var failRate = Math.ceil(fail/done*100);
     var missRate = Math.ceil(miss/total*100);
 
-    print(this, '#b;✈#; Total asserts: #b;%d#;, done: #%s;%d(%d%)#;, okey: #%s;%d(%d%)#;, fail: #%s;%d(%d%)#;, missing: #%s;%d(%d%)#; (in #b;%dms#;).',
+    print(this, '#b;✈#; Total asserts: #b;%d#;, done: #%s;%d(%d％)#;, okey: #%s;%d(%d％)#;, fail: #%s;%d(%d％)#;, missing: #%s;%d(%d％)#; (in #b;%dms#;).',
       total, miss?'rr':'gg', done, doneRate, fail?'rr':'gg', okey, okeyRate, fail?'rr':'gg', fail, failRate, miss?'rr':'gg', miss, missRate, ms
     );
   }
@@ -684,16 +694,16 @@
    */
   function report(me) {
     if (me.assert) {
-      print(me, '#g;✔ %s', me.topic);
+      print(me, '#g;✔ %s#;', me.topic);
       me.state = 1;
     }
     else {
-      print(me, '#r;✘ %s', me.topic);
+      print(me, '#r;✘ %s#;', me.topic);
       if (me.note) {
-        print(me, '#rr;%s', ident(me.note, '  '));
+        print(me, '#rr;%s#;', ident(me.note, '  '));
       }
       if (me.loc) {
-        print(me, '#rr;%s', ident(me.loc, '  '));
+        print(me, '#rr;%s#;', ident(me.loc, '  '));
       }
       me.state = -1;
     }
@@ -706,7 +716,7 @@
     if (trace) {
       err += ident('\n' + trace.code + '\n' + dup(' ', trace.col) + '^' + '\nat ' + trace.loc, '  ');
     }
-    print(me, '#r;⦸ %s', err);
+    print(me, '#r;⦸ %s#;', err);
     me.state = -1;
   }
 
@@ -784,14 +794,38 @@
   /** 运行环境: ----------------------------------------------------------------------------------------
    *
    */
+  var cacheCode = {};
+
+  function getCode(path) {
+    var code;
+    if (cacheCode.hasOwnProperty(path)) {
+      code = cacheCode[path];
+    }
+    else {
+      code = cacheCode[path] = get(path);
+    }
+    return code;
+  }
+
+  var cacheCodes = {};
+
+  function getCodes(path) {
+    var codes;
+    if (cacheCodes.hasOwnProperty(path)) {
+      codes = cacheCodes[path];
+    }
+    else {
+      codes = cacheCodes[path] = getCode(path).split('\n');
+    }
+    return codes;
+  }
+
   var it = newIt('');
   var get;
   var colors;
 
   if (global.window) {
     var script = document.scripts[document.scripts.length - 1];
-    var name = script.getAttribute('var');
-    if (name) global[name] = it;
 
     get = function (path) {
       var http = new XMLHttpRequest;
@@ -845,38 +879,17 @@
       ww: "color:lightgrey",
       w: "color:ghostwhite;font-weight:900",
     }
+
+    var name = script.getAttribute('name');
+    if (name) global[name] = it;
+    var files = script.getAttribute('files');
+    if(files){
+      files = split(files, /\s*,\s*/);
+      go(run(location.href, files));
+    }
+
   }
   else {
-    var reEval = /eval at it.run [^<]*<anonymous>/g;
-
-    it.purl = purl;
-    it.run = function (file) {
-      var _Error = Error;
-      Error = function () {
-        var error = apply(_Error, undefined, arguments);
-        var stack = error.stack.replace(reEval, file);
-        stack = stack.split('\n');
-        splice(stack, 1, 1);
-        error.stack = stack.join('\n');
-        return error;
-      };
-
-      var _rejected = rejected;
-      rejected = function (err) {
-        err.stack = err.stack.replace(reEval, file);
-        call(_rejected, this, err);
-      };
-
-      try {
-        return eval.call(undefined, getCode(file));
-      }
-      finally {
-        rejected = _rejected;
-        Error = _Error;
-      }
-    };
-
-    module.exports = it;
     var fs = require('fs');
     get = function (path) {
       return fs.readFileSync(path, {encoding: 'utf-8'});
@@ -910,33 +923,33 @@
       w: "\u001b[1m\u001b[37m"
     }
 
+    it.go = function(files) {
+      var trace = getTrace(Error(), 1);
+      go(run(trace.path, files));
+    }
+
+    module.exports = it;
   }
 
-  var cacheCode = {};
-
-  function getCode(path) {
-    var code;
-    if (cacheCode.hasOwnProperty(path)) {
-      code = cacheCode[path];
+  function* run(cwd, files) {
+    try {
+      for(var i=0, file; file = files[i]; i++) {
+        file = purl(file, cwd);
+        var code = getCode(file);
+        if(global.window) {
+          code += '\n//# sourceURL=' + file;
+        }
+        else {
+          source = file;
+        }
+        yield eval.call(undefined, code);
+      }
     }
-    else {
-      code = cacheCode[path] = get(path);
+    finally {
+      source = '';
     }
-    return code;
   }
 
-  var cacheCodes = {};
-
-  function getCodes(path) {
-    var codes;
-    if (cacheCodes.hasOwnProperty(path)) {
-      codes = cacheCodes[path];
-    }
-    else {
-      codes = cacheCodes[path] = getCode(path).split('\n');
-    }
-    return codes;
-  }
 
 })(function modulize(module, exports) {
   'use strict';
